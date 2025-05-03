@@ -2,13 +2,47 @@ use std::cell::RefCell;
 
 use pocketflow_rs::{
     communication::SharedStore,
-    core::{Action, Result},
-    node::{Node, RetryableNode},
+    core::{Action, DEFAULT_ACTION, Result},
+    node::{BaseNode, RetryableNode},
 };
 
+// ------------------------------------
+// 1. Default Node: get default action
+// ------------------------------------
+struct DefaultNode;
+
+impl BaseNode for DefaultNode {
+    type PrepResult = ();
+    type ExecResult = ();
+
+    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
+        Ok(())
+    }
+
+    fn exec(&self, _prep_res: &Self::PrepResult) -> Result<Self::ExecResult> {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_default_node() {
+    let node = DefaultNode;
+    let store = SharedStore::new();
+    store.insert_json("input", "hello");
+
+    let result = node.run(&store);
+    match result {
+        Ok(action) => assert_eq!(action, DEFAULT_ACTION),
+        Err(e) => panic!("Expected success, but got error: {}", e),
+    }
+}
+
+// ------------------------------------
+// 2. SimpleNode Node: simply run a function
+// ------------------------------------
 struct SimpleNode;
 
-impl Node for SimpleNode {
+impl BaseNode for SimpleNode {
     type PrepResult = String;
     type ExecResult = usize;
 
@@ -16,17 +50,17 @@ impl Node for SimpleNode {
         Ok(shared.get_json::<String>("input").unwrap_or_default())
     }
 
-    fn exec(&self, prep_res: Self::PrepResult) -> Result<Self::ExecResult> {
+    fn exec(&self, prep_res: &Self::PrepResult) -> Result<Self::ExecResult> {
         Ok(prep_res.len())
     }
 
     fn post(
         &self,
         _shared: &SharedStore,
-        _prep_res: Self::PrepResult,
-        exec_res: Self::ExecResult,
+        _prep_res: &Self::PrepResult,
+        exec_res: &Self::ExecResult,
     ) -> Result<Action> {
-        Ok(format!("len={exec_res}").as_str().into())
+        Ok(format!("len={exec_res}").into())
     }
 }
 
@@ -36,22 +70,29 @@ fn test_run_node() {
     let store = SharedStore::new();
     store.insert_json("input", "hello");
 
-    let result = node.run(&store).unwrap();
-    assert_eq!(result, "len=5".into());
+    let result = node.run(&store);
+    match result {
+        Ok(action) => assert_eq!(action, "len=5".into()),
+        Err(e) => panic!("Expected success, but got error: {}", e),
+    }
 }
 
 // ------------------------------------
-// 2. Retryable Node: fails once, then works
+// 3. Retryable Node: fails once, then works
 // ------------------------------------
 struct RetryOnceNode {
     attempts: RefCell<usize>,
 }
 
-impl Node for RetryOnceNode {
+impl BaseNode for RetryOnceNode {
     type PrepResult = ();
     type ExecResult = usize;
 
-    fn exec(&self, _prep: Self::PrepResult) -> Result<Self::ExecResult> {
+    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
+        Ok(())
+    }
+
+    fn exec(&self, _prep: &Self::PrepResult) -> Result<Self::ExecResult> {
         let mut guard = self.attempts.borrow_mut();
         if *guard == 0 {
             *guard += 1;
@@ -64,8 +105,8 @@ impl Node for RetryOnceNode {
     fn post(
         &self,
         _shared: &SharedStore,
-        _prep: Self::PrepResult,
-        exec: Self::ExecResult,
+        _prep: &Self::PrepResult,
+        exec: &Self::ExecResult,
     ) -> Result<Action> {
         Ok(format!("attempts={exec}").into())
     }
@@ -87,20 +128,27 @@ fn test_retryable_node_retries_and_succeeds() {
     };
     let store = SharedStore::new();
 
-    let result = node.run_with_retry(&store).unwrap();
-    assert_eq!(result, "attempts=1".into());
+    let result = node.run_with_retry(&store);
+    match result {
+        Ok(action) => assert_eq!(action, "attempts=1".into()),
+        Err(e) => panic!("Expected success, but got error: {}", e),
+    }
 }
 
 // ------------------------------------
-// 3. Retryable Node: always fails
+// 4. Retryable Node: always fails
 // ------------------------------------
 struct AlwaysFailNode;
 
-impl Node for AlwaysFailNode {
+impl BaseNode for AlwaysFailNode {
     type PrepResult = ();
     type ExecResult = ();
 
-    fn exec(&self, _prep: Self::PrepResult) -> Result<Self::ExecResult> {
+    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
+        Ok(())
+    }
+
+    fn exec(&self, _prep: &Self::PrepResult) -> Result<Self::ExecResult> {
         Err(anyhow::anyhow!("boom"))
     }
 }

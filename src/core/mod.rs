@@ -5,4 +5,4 @@ pub mod node;
 // pub mod flow;
 
 pub use anyhow::Result;
-pub use r#type::Action;
+pub use r#type::{Action, DEFAULT_ACTION, NONE_ACTION};
