@@ -103,7 +103,6 @@ fn test_flow_nested() {
     }
 
     let node3 = Arc::new(Node3);
-    #[allow(clippy::arc_with_non_send_sync)]
     let mut outer = Flow::new(Some(Arc::new(inner)));
     outer.add_transition("done", node3.clone());
     let shared = SharedStore::new();

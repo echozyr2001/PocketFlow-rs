@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::{thread::sleep, time::Duration};
 
 /// The core Node trait that defines the basic interface for all nodes
-pub trait BaseNode {
+pub trait BaseNode: Send + Sync {
     /// Prepare data from shared store
     fn prep(&self, _shared: &SharedStore) -> Result<PrepResult> {
         Ok(Default::default())

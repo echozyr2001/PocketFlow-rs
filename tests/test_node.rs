@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-
+use parking_lot::Mutex;
 use pocketflow_rs::{
     communication::SharedStore,
     core::{Action, DEFAULT_ACTION, ExecResult, PrepResult, Result},
@@ -77,12 +76,12 @@ fn test_run_node() {
 // 3. Retryable Node: fails once, then works
 // ------------------------------------
 struct RetryOnceNode {
-    attempts: RefCell<usize>,
+    attempts: Mutex<usize>,
 }
 
 impl BaseNode for RetryOnceNode {
     fn exec(&self, _prep: &PrepResult) -> Result<ExecResult> {
-        let mut guard = self.attempts.borrow_mut();
+        let mut guard = self.attempts.lock();
         if *guard == 0 {
             *guard += 1;
             Err(anyhow::anyhow!("fail once"))
@@ -122,7 +121,7 @@ impl RetryableNode for RetryOnceNode {
 #[test]
 fn test_retryable_node_retries_and_succeeds() {
     let node = RetryOnceNode {
-        attempts: RefCell::new(0),
+        attempts: Mutex::new(0),
     };
     let store = SharedStore::new();
 
