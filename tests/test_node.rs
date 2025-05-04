@@ -14,14 +14,6 @@ struct DefaultNode;
 impl BaseNode for DefaultNode {
     type PrepResult = ();
     type ExecResult = ();
-
-    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
-        Ok(())
-    }
-
-    fn exec(&self, _prep_res: &Self::PrepResult) -> Result<Self::ExecResult> {
-        Ok(())
-    }
 }
 
 #[test]
@@ -88,10 +80,6 @@ impl BaseNode for RetryOnceNode {
     type PrepResult = ();
     type ExecResult = usize;
 
-    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
-        Ok(())
-    }
-
     fn exec(&self, _prep: &Self::PrepResult) -> Result<Self::ExecResult> {
         let mut guard = self.attempts.borrow_mut();
         if *guard == 0 {
@@ -109,6 +97,10 @@ impl BaseNode for RetryOnceNode {
         exec: &Self::ExecResult,
     ) -> Result<Action> {
         Ok(format!("attempts={exec}").into())
+    }
+
+    fn run(&self, shared: &SharedStore) -> Result<Action> {
+        self.run_with_retry(shared)
     }
 }
 
@@ -128,7 +120,7 @@ fn test_retryable_node_retries_and_succeeds() {
     };
     let store = SharedStore::new();
 
-    let result = node.run_with_retry(&store);
+    let result = node.run(&store);
     match result {
         Ok(action) => assert_eq!(action, "attempts=1".into()),
         Err(e) => panic!("Expected success, but got error: {}", e),
@@ -144,12 +136,12 @@ impl BaseNode for AlwaysFailNode {
     type PrepResult = ();
     type ExecResult = ();
 
-    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
-        Ok(())
-    }
-
     fn exec(&self, _prep: &Self::PrepResult) -> Result<Self::ExecResult> {
         Err(anyhow::anyhow!("boom"))
+    }
+
+    fn run(&self, shared: &SharedStore) -> Result<Action> {
+        self.run_with_retry(shared)
     }
 }
 
@@ -167,6 +159,6 @@ fn test_retryable_node_fails_all_attempts() {
     let node = AlwaysFailNode;
     let store = SharedStore::new();
 
-    let result = node.run_with_retry(&store);
+    let result = node.run(&store);
     assert!(result.is_err());
 }

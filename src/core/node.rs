@@ -1,7 +1,4 @@
-use crate::core::{
-    communication::SharedStore,
-    r#type::{Action, DEFAULT_ACTION},
-};
+use crate::core::{communication::SharedStore, r#type::Action};
 use anyhow::Result;
 use std::{thread::sleep, time::Duration};
 
@@ -11,10 +8,14 @@ pub trait BaseNode {
     type ExecResult: Default + Clone;
 
     /// Prepare data from shared store
-    fn prep(&self, shared: &SharedStore) -> Result<Self::PrepResult>;
+    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
+        Ok(Default::default())
+    }
 
     /// Execute computation
-    fn exec(&self, prep_res: &Self::PrepResult) -> Result<Self::ExecResult>;
+    fn exec(&self, _prep_res: &Self::PrepResult) -> Result<Self::ExecResult> {
+        Ok(Default::default())
+    }
 
     /// Process results and determine next action
     fn post(
@@ -23,7 +24,7 @@ pub trait BaseNode {
         _prep_res: &Self::PrepResult,
         _exec_res: &Self::ExecResult,
     ) -> Result<Action> {
-        Ok(DEFAULT_ACTION)
+        Ok(Action::default())
     }
 
     /// Run the node
@@ -64,18 +65,20 @@ pub trait RetryableNode: BaseNode {
     }
 }
 
-// /// Base implementation for nodes with retry capability and params
-// pub struct BaseNode<P, E> {
+// /// Base implementation for nodes with retry capability
+// pub struct Node<P, E> {
 //     max_retries: u32,
 //     wait_ms: u64,
 //     _phantom_p: std::marker::PhantomData<P>,
 //     _phantom_e: std::marker::PhantomData<E>,
 // }
 
-// impl<P, E> BaseNode<P, E>
+// impl<P, E> Node<P, E>
 // where
-//     P: Default + Clone + 'static,
-//     E: Default + 'static,
+//     // P: Default + Clone + 'static,
+//     // E: Default + Clone + 'static,
+//     P: Default + Clone,
+//     E: Default + Clone,
 // {
 //     pub fn new(max_retries: u32, wait_ms: u64) -> Self {
 //         Self {
@@ -87,7 +90,7 @@ pub trait RetryableNode: BaseNode {
 //     }
 // }
 
-// impl<P, E> Node for BaseNode<P, E>
+// impl<P, E> BaseNode for Node<P, E>
 // where
 //     // P: Default + Clone + 'static,
 //     // E: Default + Clone + 'static,
@@ -96,9 +99,13 @@ pub trait RetryableNode: BaseNode {
 // {
 //     type PrepResult = P;
 //     type ExecResult = E;
+
+//     fn run(&self, shared: &SharedStore) -> Result<Action> {
+//         self.run_with_retry(shared)
+//     }
 // }
 
-// impl<P, E> RetryableNode for BaseNode<P, E>
+// impl<P, E> RetryableNode for Node<P, E>
 // where
 //     // P: Default + Clone + 'static,
 //     // E: Default + Clone + 'static,
