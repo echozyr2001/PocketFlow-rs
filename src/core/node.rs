@@ -1,19 +1,19 @@
-use crate::core::{communication::SharedStore, r#type::Action};
+use crate::core::{
+    communication::SharedStore,
+    r#type::{Action, ExecResult, PrepResult},
+};
 use anyhow::Result;
 use std::{thread::sleep, time::Duration};
 
 /// The core Node trait that defines the basic interface for all nodes
 pub trait BaseNode {
-    type PrepResult: Default + Clone;
-    type ExecResult: Default + Clone;
-
     /// Prepare data from shared store
-    fn prep(&self, _shared: &SharedStore) -> Result<Self::PrepResult> {
+    fn prep(&self, _shared: &SharedStore) -> Result<PrepResult> {
         Ok(Default::default())
     }
 
     /// Execute computation
-    fn exec(&self, _prep_res: &Self::PrepResult) -> Result<Self::ExecResult> {
+    fn exec(&self, _prep_res: &PrepResult) -> Result<ExecResult> {
         Ok(Default::default())
     }
 
@@ -21,8 +21,8 @@ pub trait BaseNode {
     fn post(
         &self,
         _shared: &SharedStore,
-        _prep_res: &Self::PrepResult,
-        _exec_res: &Self::ExecResult,
+        _prep_res: &PrepResult,
+        _exec_res: &ExecResult,
     ) -> Result<Action> {
         Ok(Action::default())
     }
@@ -64,59 +64,3 @@ pub trait RetryableNode: BaseNode {
         Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Node execution failed")))
     }
 }
-
-// /// Base implementation for nodes with retry capability
-// pub struct Node<P, E> {
-//     max_retries: u32,
-//     wait_ms: u64,
-//     _phantom_p: std::marker::PhantomData<P>,
-//     _phantom_e: std::marker::PhantomData<E>,
-// }
-
-// impl<P, E> Node<P, E>
-// where
-//     // P: Default + Clone + 'static,
-//     // E: Default + Clone + 'static,
-//     P: Default + Clone,
-//     E: Default + Clone,
-// {
-//     pub fn new(max_retries: u32, wait_ms: u64) -> Self {
-//         Self {
-//             max_retries,
-//             wait_ms,
-//             _phantom_p: std::marker::PhantomData,
-//             _phantom_e: std::marker::PhantomData,
-//         }
-//     }
-// }
-
-// impl<P, E> BaseNode for Node<P, E>
-// where
-//     // P: Default + Clone + 'static,
-//     // E: Default + Clone + 'static,
-//     P: Default + Clone,
-//     E: Default + Clone,
-// {
-//     type PrepResult = P;
-//     type ExecResult = E;
-
-//     fn run(&self, shared: &SharedStore) -> Result<Action> {
-//         self.run_with_retry(shared)
-//     }
-// }
-
-// impl<P, E> RetryableNode for Node<P, E>
-// where
-//     // P: Default + Clone + 'static,
-//     // E: Default + Clone + 'static,
-//     P: Default + Clone,
-//     E: Default + Clone,
-// {
-//     fn get_max_retries(&self) -> u32 {
-//         self.max_retries
-//     }
-
-//     fn get_wait_ms(&self) -> u64 {
-//         self.wait_ms
-//     }
-// }

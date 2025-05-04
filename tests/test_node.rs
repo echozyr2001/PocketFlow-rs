@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use pocketflow_rs::{
     communication::SharedStore,
-    core::{Action, DEFAULT_ACTION, Result},
+    core::{Action, DEFAULT_ACTION, ExecResult, PrepResult, Result},
     node::{BaseNode, RetryableNode},
 };
 
@@ -11,10 +11,7 @@ use pocketflow_rs::{
 // ------------------------------------
 struct DefaultNode;
 
-impl BaseNode for DefaultNode {
-    type PrepResult = ();
-    type ExecResult = ();
-}
+impl BaseNode for DefaultNode {}
 
 #[test]
 fn test_default_node() {
@@ -35,24 +32,31 @@ fn test_default_node() {
 struct SimpleNode;
 
 impl BaseNode for SimpleNode {
-    type PrepResult = String;
-    type ExecResult = usize;
-
-    fn prep(&self, shared: &SharedStore) -> Result<Self::PrepResult> {
-        Ok(shared.get_json::<String>("input").unwrap_or_default())
+    fn prep(&self, shared: &SharedStore) -> Result<PrepResult> {
+        let input = shared.get_json::<String>("input").unwrap_or_default();
+        Ok(serde_json::Value::String(input).into())
     }
 
-    fn exec(&self, prep_res: &Self::PrepResult) -> Result<Self::ExecResult> {
-        Ok(prep_res.len())
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        if let Some(s) = prep_res.as_str() {
+            let length = s.len();
+            Ok(serde_json::Value::Number(length.into()).into())
+        } else {
+            Err(anyhow::anyhow!("Expected string in prep_res"))
+        }
     }
 
     fn post(
         &self,
         _shared: &SharedStore,
-        _prep_res: &Self::PrepResult,
-        exec_res: &Self::ExecResult,
+        _prep_res: &PrepResult,
+        exec_res: &ExecResult,
     ) -> Result<Action> {
-        Ok(format!("len={exec_res}").into())
+        if let Some(n) = exec_res.as_u64() {
+            Ok(format!("len={}", n).into())
+        } else {
+            Err(anyhow::anyhow!("Expected number in exec_res"))
+        }
     }
 }
 
@@ -77,26 +81,28 @@ struct RetryOnceNode {
 }
 
 impl BaseNode for RetryOnceNode {
-    type PrepResult = ();
-    type ExecResult = usize;
-
-    fn exec(&self, _prep: &Self::PrepResult) -> Result<Self::ExecResult> {
+    fn exec(&self, _prep: &PrepResult) -> Result<ExecResult> {
         let mut guard = self.attempts.borrow_mut();
         if *guard == 0 {
             *guard += 1;
             Err(anyhow::anyhow!("fail once"))
         } else {
-            Ok(*guard)
+            // Convert attempts count to ExecResult
+            Ok(serde_json::Value::Number((*guard).into()).into())
         }
     }
 
     fn post(
         &self,
         _shared: &SharedStore,
-        _prep: &Self::PrepResult,
-        exec: &Self::ExecResult,
+        _prep: &PrepResult,
+        exec_res: &ExecResult,
     ) -> Result<Action> {
-        Ok(format!("attempts={exec}").into())
+        if let Some(n) = exec_res.as_u64() {
+            Ok(format!("attempts={}", n).into())
+        } else {
+            Err(anyhow::anyhow!("Expected number in exec_res"))
+        }
     }
 
     fn run(&self, shared: &SharedStore) -> Result<Action> {
@@ -133,10 +139,7 @@ fn test_retryable_node_retries_and_succeeds() {
 struct AlwaysFailNode;
 
 impl BaseNode for AlwaysFailNode {
-    type PrepResult = ();
-    type ExecResult = ();
-
-    fn exec(&self, _prep: &Self::PrepResult) -> Result<Self::ExecResult> {
+    fn exec(&self, _prep: &PrepResult) -> Result<ExecResult> {
         Err(anyhow::anyhow!("boom"))
     }
 

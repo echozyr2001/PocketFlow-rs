@@ -21,3 +21,57 @@ impl<'a> From<&'a str> for Action<'a> {
         Action(Some(value))
     }
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PrepResult(serde_json::Value);
+
+impl From<serde_json::Value> for PrepResult {
+    fn from(value: serde_json::Value) -> Self {
+        PrepResult(value)
+    }
+}
+
+impl PrepResult {
+    pub fn as_str(&self) -> Option<&str> {
+        self.0.as_str()
+    }
+
+    pub fn as_u64(&self) -> Option<u64> {
+        self.0.as_u64()
+    }
+
+    pub fn as_f64(&self) -> Option<f64> {
+        self.0.as_f64()
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        self.0.as_bool()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExecResult(serde_json::Value);
+
+impl From<serde_json::Value> for ExecResult {
+    fn from(value: serde_json::Value) -> Self {
+        ExecResult(value)
+    }
+}
+
+impl ExecResult {
+    pub fn as_str(&self) -> Option<&str> {
+        self.0.as_str()
+    }
+
+    pub fn as_u64(&self) -> Option<u64> {
+        self.0.as_u64()
+    }
+
+    pub fn as_f64(&self) -> Option<f64> {
+        self.0.as_f64()
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        self.0.as_bool()
+    }
+}
