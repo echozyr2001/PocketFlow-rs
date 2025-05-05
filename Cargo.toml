@@ -6,7 +6,13 @@ authors = ["echozyr2001 <echo.zyr.2001@gmail.com>"]
 description = "A Rust implementation of PocketFlow framework"
 license = "MIT"
 
+# [features]
+# default = []
+# parallel = ["dep:rayon"]
+
 [dependencies]
+# rayon = { version = "1.10", optional = true }
+rayon = "1.10"
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
 anyhow = "1.0"

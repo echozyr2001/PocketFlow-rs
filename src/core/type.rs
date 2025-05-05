@@ -1,3 +1,5 @@
+use serde_json::{Map, Value};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Action<'a>(pub Option<&'a str>);
 
@@ -23,10 +25,10 @@ impl<'a> From<&'a str> for Action<'a> {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PrepResult(serde_json::Value);
+pub struct PrepResult(Value);
 
-impl From<serde_json::Value> for PrepResult {
-    fn from(value: serde_json::Value) -> Self {
+impl From<Value> for PrepResult {
+    fn from(value: Value) -> Self {
         PrepResult(value)
     }
 }
@@ -47,13 +49,17 @@ impl PrepResult {
     pub fn as_bool(&self) -> Option<bool> {
         self.0.as_bool()
     }
+
+    pub fn as_object(&self) -> Option<&Map<String, Value>> {
+        self.0.as_object()
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ExecResult(serde_json::Value);
+pub struct ExecResult(Value);
 
-impl From<serde_json::Value> for ExecResult {
-    fn from(value: serde_json::Value) -> Self {
+impl From<Value> for ExecResult {
+    fn from(value: Value) -> Self {
         ExecResult(value)
     }
 }
@@ -73,5 +79,9 @@ impl ExecResult {
 
     pub fn as_bool(&self) -> Option<bool> {
         self.0.as_bool()
+    }
+
+    pub fn as_object(&self) -> Option<&Map<String, Value>> {
+        self.0.as_object()
     }
 }

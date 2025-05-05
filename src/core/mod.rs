@@ -1,5 +1,6 @@
 mod r#type;
 
+pub mod batch;
 pub mod communication;
 pub mod flow;
 pub mod node;

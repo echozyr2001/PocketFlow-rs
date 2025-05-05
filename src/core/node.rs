@@ -6,6 +6,7 @@ use anyhow::Result;
 use std::{thread::sleep, time::Duration};
 
 /// The core Node trait that defines the basic interface for all nodes
+// #[cfg(feature = "parallel")]
 pub trait BaseNode: Send + Sync {
     /// Prepare data from shared store
     fn prep(&self, _shared: &SharedStore) -> Result<PrepResult> {
@@ -34,6 +35,11 @@ pub trait BaseNode: Send + Sync {
         self.post(shared, &prep_res, &exec_res)
     }
 }
+
+// #[cfg(not(feature = "parallel"))]
+// pub trait BaseNode {
+// ...
+// }
 
 /// RetryableNode trait for nodes that support retry logic
 pub trait RetryableNode: BaseNode {
