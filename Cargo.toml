@@ -24,3 +24,5 @@ parking_lot = "0.12"
 
 [dev-dependencies]
 tokio-test = "0.4"
+dotenvy = "0.15"
+openai_api_rust = { path = "./openai-api" }
