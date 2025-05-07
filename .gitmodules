@@ -1,0 +1,3 @@
+[submodule "openai-api"]
+	path = openai-api
+	url = https://github.com/echozyr2001/openai-api

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dotenvy::dotenv;
 use openai_api_rust::{
-    Auth, Message, OpenAI, Role,
+    Message, OpenAI, Role,
     chat::{ChatApi, ChatBody},
 };
 use serde_json::json;
@@ -13,19 +13,11 @@ use pocketflow_rs::core::{
 };
 
 fn call_llm_real(prompt: &str) -> Result<String> {
-    // Make sure you have a file named `.env` with the `OPENAI_KEY` environment variable defined!
+    // Make sure you have a file named `.env` with the `OPENAI_API_KEY` & `OPENAI_API_URL` environment variable defined!
     dotenv().unwrap();
-    let api_key =
-        std::env::var("OPENAI_API_KEY").map_err(|_| anyhow::anyhow!("Missing OPENAI_API_KEY"))?;
-
-    let base_url = std::env::var("OPENAI_BASE_URL")
-        .unwrap_or_else(|_| "https://api.openai.com/v1/".to_string());
-
+    let openai = OpenAI::from_env().unwrap();
     let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string());
 
-    let auth = Auth::new(&api_key);
-
-    let openai = OpenAI::new(auth, &base_url);
     let body = ChatBody {
         model,
         max_tokens: None,
