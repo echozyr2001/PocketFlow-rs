@@ -50,6 +50,10 @@ impl PrepResult {
         self.0.as_bool()
     }
 
+    pub fn as_array(&self) -> Option<&Vec<Value>> {
+        self.0.as_array()
+    }
+
     pub fn as_object(&self) -> Option<&Map<String, Value>> {
         self.0.as_object()
     }
@@ -79,6 +83,10 @@ impl ExecResult {
 
     pub fn as_bool(&self) -> Option<bool> {
         self.0.as_bool()
+    }
+
+    pub fn as_array(&self) -> Option<&Vec<Value>> {
+        self.0.as_array()
     }
 
     pub fn as_object(&self) -> Option<&Map<String, Value>> {

@@ -1,46 +1,13 @@
 use anyhow::Result;
-use dotenvy::dotenv;
-use openai_api_rust::{
-    Message, OpenAI, Role,
-    chat::{ChatApi, ChatBody},
+use pocketflow_rs::core::{
+    Action, ExecResult, PrepResult, communication::SharedStore, flow::Flow, node::BaseNode,
 };
 use serde_json::json;
 use std::sync::Arc;
 
-// Import required components from the pocketflow-rs crate
-use pocketflow_rs::core::{
-    Action, ExecResult, PrepResult, communication::SharedStore, flow::Flow, node::BaseNode,
-};
-
-fn call_llm_real(prompt: &str) -> Result<String> {
-    // Make sure you have a file named `.env` with the `OPENAI_API_KEY` & `OPENAI_API_URL` environment variable defined!
-    dotenv().unwrap();
-    let openai = OpenAI::from_env().unwrap();
-    let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string());
-
-    let body = ChatBody {
-        model,
-        max_tokens: None,
-        temperature: None,
-        top_p: None,
-        n: None,
-        stream: Some(false),
-        stop: None,
-        presence_penalty: None,
-        frequency_penalty: None,
-        logit_bias: None,
-        user: None,
-        messages: vec![Message {
-            role: Role::User,
-            content: prompt.into(),
-        }],
-    };
-    let rs = openai.chat_completion_create(&body);
-    let choice = rs.unwrap().choices;
-    let message = &choice[0].message.as_ref().unwrap();
-
-    Ok(message.content.clone())
-}
+#[path = "../utils/mod.rs"]
+mod utils;
+use utils::call_llm_chat;
 
 // Define an AnswerNode similar to the Python example
 struct AnswerNode;
@@ -62,7 +29,11 @@ impl BaseNode for AnswerNode {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Question not found in prep result"))?;
 
-        let answer = call_llm_real(question)?;
+        let messages = vec![openai_api_rust::Message {
+            role: openai_api_rust::Role::User,
+            content: question.to_string(),
+        }];
+        let answer = call_llm_chat(&messages, None)?;
 
         // Convert the answer string to JSON value and create ExecResult
         Ok(ExecResult::from(json!(answer)))
