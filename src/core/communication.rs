@@ -5,46 +5,11 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// StoreValue: Support serde_json::Value and any types
-#[derive(Debug)]
-pub enum StoreValue {
-    Any(Box<dyn Any + Send + Sync>),
-    Json(JsonValue),
-    // Can be extended to other types
-}
-
-impl StoreValue {
-    pub fn as_json(&self) -> Option<&JsonValue> {
-        match self {
-            StoreValue::Json(j) => Some(j),
-            _ => None,
-        }
-    }
-    pub fn as_any<T: 'static>(&self) -> Option<&T> {
-        match self {
-            StoreValue::Any(b) => b.downcast_ref::<T>(),
-            _ => None,
-        }
-    }
-    pub fn into_json(self) -> Option<JsonValue> {
-        match self {
-            StoreValue::Json(j) => Some(j),
-            _ => None,
-        }
-    }
-    pub fn into_any<T: 'static>(self) -> Option<Box<T>> {
-        match self {
-            StoreValue::Any(b) => b.downcast::<T>().ok(),
-            _ => None,
-        }
-    }
-}
-
 /// SharedStore provides global data sharing between nodes
 /// Similar to heap memory - shared by all nodes
 #[derive(Clone, Default)]
 pub struct SharedStore {
-    inner: Arc<RwLock<HashMap<String, StoreValue>>>,
+    inner: Arc<RwLock<HashMap<String, Box<dyn Any + Send + Sync>>>>,
 }
 
 impl SharedStore {
@@ -54,65 +19,28 @@ impl SharedStore {
         }
     }
 
-    /// Insert a serde_json::Value into the store
-    pub fn insert_json<V: Serialize>(&self, key: &str, value: V) {
-        let json_value = serde_json::to_value(value).unwrap();
-        self.inner
-            .write()
-            .insert(key.to_string(), StoreValue::Json(json_value));
+    /// Insert a value of any type that is 'static, Send, and Sync into the store.
+    pub fn insert<T: 'static + Send + Sync>(&self, key: &str, value: T) {
+        self.inner.write().insert(key.to_string(), Box::new(value));
     }
 
-    /// Insert any type into the store (advanced use)
-    pub fn insert_any<T: 'static + Send + Sync>(&self, key: &str, value: T) {
-        self.inner
-            .write()
-            .insert(key.to_string(), StoreValue::Any(Box::new(value)));
-    }
-
-    /// Get a value from the store and deserialize to type T (if Json)
-    pub fn get_json<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
+    /// Get a clone of a value from the store, downcasting it to type T.
+    /// Returns None if the key does not exist or if the stored value is not of type T.
+    pub fn get<T: 'static + Clone>(&self, key: &str) -> Option<T> {
         self.inner
             .read()
             .get(key)
-            .and_then(|v| v.as_json())
-            .and_then(|j| serde_json::from_value(j.clone()).ok())
-    }
-
-    /// Get a reference to the raw JsonValue
-    pub fn get_json_value(&self, key: &str) -> Option<JsonValue> {
-        self.inner
-            .read()
-            .get(key)
-            .and_then(|v| v.as_json().cloned())
-    }
-
-    /// Get a reference to an Any value (advanced use)
-    pub fn get_any<T: 'static + Clone>(&self, key: &str) -> Option<T> {
-        self.inner
-            .read()
-            .get(key)
-            .and_then(|v| v.as_any::<T>())
+            .and_then(|b| b.downcast_ref::<T>())
             .cloned()
     }
 
-    /// Update a value in the store (Json only)
-    pub fn update_json<V: Serialize>(&self, key: &str, value: V) -> Option<()> {
-        let json_value = serde_json::to_value(value).ok()?;
-        let mut guard = self.inner.write();
-        if let Some(StoreValue::Json(_)) = guard.get(key) {
-            guard.insert(key.to_string(), StoreValue::Json(json_value));
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    /// Remove a value
-    pub fn remove(&self, key: &str) -> Option<StoreValue> {
+    /// Remove a value from the store.
+    /// Returns the boxed value if the key existed.
+    pub fn remove(&self, key: &str) -> Option<Box<dyn Any + Send + Sync>> {
         self.inner.write().remove(key)
     }
 
-    /// Check if a key exists
+    /// Check if a key exists.
     pub fn contains_key(&self, key: &str) -> bool {
         self.inner.read().contains_key(key)
     }
@@ -143,9 +71,10 @@ impl Params {
     }
 
     /// Set a parameter value
-    pub fn set<V: Serialize>(&mut self, key: &str, value: V) {
-        let json_value = serde_json::to_value(value).unwrap();
+    pub fn set<V: Serialize>(&mut self, key: &str, value: V) -> Result<(), serde_json::Error> {
+        let json_value = serde_json::to_value(value)?;
         self.inner.insert(key.to_string(), json_value);
+        Ok(())
     }
 
     /// Get a parameter value and deserialize to type T
@@ -156,8 +85,13 @@ impl Params {
     }
 
     /// Get a reference to the raw JsonValue
-    pub fn get_json(&self, key: &str) -> Option<&JsonValue> {
+    pub fn get_value(&self, key: &str) -> Option<&JsonValue> {
         self.inner.get(key)
+    }
+
+    /// Creates a new ParamsBuilder instance.
+    pub fn builder() -> ParamsBuilder {
+        ParamsBuilder::new()
     }
 
     /// Merge with another Params instance
@@ -171,6 +105,44 @@ impl Params {
     /// Get all keys
     pub fn keys(&self) -> Vec<String> {
         self.inner.keys().cloned().collect()
+    }
+}
+
+/// `ParamsBuilder` provides a fluent interface for constructing `Params` instances.
+#[derive(Default)]
+pub struct ParamsBuilder {
+    inner: HashMap<String, JsonValue>,
+}
+
+impl ParamsBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Inserts a key-value pair into the parameters.
+    ///
+    /// The value will be serialized to a `JsonValue`.
+    /// Returns an error if serialization fails.
+    pub fn insert<V: Serialize>(mut self, key: &str, value: V) -> Result<Self, serde_json::Error> {
+        let json_value = serde_json::to_value(value)?;
+        self.inner.insert(key.to_string(), json_value);
+        Ok(self)
+    }
+
+    /// Inserts a key-value pair into the parameters, panicking if serialization fails.
+    ///
+    /// The value will be serialized to a `JsonValue`.
+    /// Use this method when you are certain that serialization will succeed.
+    pub fn insert_unwrap<V: Serialize>(mut self, key: &str, value: V) -> Self {
+        let json_value = serde_json::to_value(value)
+            .expect("ParamsBuilder: Failed to serialize value during insert_unwrap");
+        self.inner.insert(key.to_string(), json_value);
+        self
+    }
+
+    /// Builds the `Params` instance from the accumulated parameters.
+    pub fn build(self) -> Params {
+        Params { inner: self.inner }
     }
 }
 

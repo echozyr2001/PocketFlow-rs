@@ -15,9 +15,11 @@ struct AnswerNode;
 impl BaseNode for AnswerNode {
     fn prep(&self, shared: &SharedStore) -> Result<PrepResult> {
         // Extract the question from shared storage
-        let question = shared
-            .get_json::<String>("question")
-            .ok_or_else(|| anyhow::anyhow!("Question not found in shared store"))?;
+        let question_json = shared
+            .get::<serde_json::Value>("question")
+            .ok_or_else(|| anyhow::anyhow!("Question not found in shared store (as JsonValue)"))?;
+        let question: String = serde_json::from_value(question_json)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize question: {}", e))?;
 
         // Convert the question string to JSON value and create PrepResult
         Ok(PrepResult::from(json!(question)))
@@ -51,7 +53,7 @@ impl BaseNode for AnswerNode {
             .ok_or_else(|| anyhow::anyhow!("Answer not found in exec result"))?;
 
         // Insert the answer into shared store
-        shared.insert_json("answer", answer);
+        shared.insert("answer", json!(answer)); // No ? needed as insert doesn't return Result
         Ok(Action::default())
     }
 }
@@ -59,7 +61,10 @@ impl BaseNode for AnswerNode {
 fn main() -> Result<()> {
     // Create a shared store with initial data
     let shared = SharedStore::new();
-    shared.insert_json("question", "In one sentence, what's the end of universe?");
+    shared.insert(
+        "question",
+        json!("In one sentence, what's the end of universe?"),
+    ); // No ?
 
     // Create the node and flow
     let answer_node = Arc::new(AnswerNode);
@@ -72,14 +77,16 @@ fn main() -> Result<()> {
     println!(
         "Question: {}",
         shared
-            .get_json::<String>("question")
+            .get::<serde_json::Value>("question")
+            .and_then(|jv| serde_json::from_value::<String>(jv).ok())
             .unwrap_or_else(|| "Question not found".to_string())
     );
 
     println!(
         "Answer: {}",
         shared
-            .get_json::<String>("answer")
+            .get::<serde_json::Value>("answer")
+            .and_then(|jv| serde_json::from_value::<String>(jv).ok())
             .unwrap_or_else(|| "Answer not found".to_string())
     );
 

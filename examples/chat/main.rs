@@ -19,7 +19,7 @@ impl BaseNode for ChatNode {
     fn prep(&self, shared: &SharedStore) -> Result<PrepResult> {
         // Initialize messages if this is the first run
         if !shared.contains_key("messages") {
-            shared.insert_json("messages", json!([]));
+            shared.insert("messages", json!([]));
             println!("Welcome to the chat! Type 'exit' to end the conversation.");
         }
 
@@ -37,16 +37,16 @@ impl BaseNode for ChatNode {
 
         // Add user message to history
         let mut messages = shared
-            .get_json_value("messages")
-            .unwrap()
+            .get::<serde_json::Value>("messages")
+            .expect("Messages JsonValue not found or wrong type in prep")
             .as_array()
-            .unwrap()
+            .expect("Messages JsonValue is not an array in prep")
             .clone();
         messages.push(json!({
             "role": "user",
             "content": user_input
         }));
-        shared.insert_json("messages", json!(messages));
+        shared.insert("messages", json!(messages));
 
         // Return all messages for the LLM
         Ok(json!(messages).into())
@@ -99,16 +99,16 @@ impl BaseNode for ChatNode {
 
         // Add assistant message to history
         let mut messages = shared
-            .get_json_value("messages")
-            .unwrap()
+            .get::<serde_json::Value>("messages")
+            .expect("Messages JsonValue not found or wrong type in post")
             .as_array()
-            .unwrap()
+            .expect("Messages JsonValue is not an array in post")
             .clone();
         messages.push(json!({
             "role": "assistant",
             "content": content
         }));
-        shared.insert_json("messages", json!(messages));
+        shared.insert("messages", json!(messages)); // No ?
 
         // Loop back to continue the conversation
         Ok("continue".into())

@@ -4,6 +4,7 @@ use pocketflow_rs::{
     core::{Action, DEFAULT_ACTION, ExecResult, PrepResult, Result},
     node::{BaseNode, RetryableNode},
 };
+use serde_json::json; // Added for json! macro
 
 // ------------------------------------
 // 1. Default Node: get default action
@@ -16,7 +17,7 @@ impl BaseNode for DefaultNode {}
 fn test_default_node() {
     let node = DefaultNode;
     let store = SharedStore::new();
-    store.insert_json("input", "hello");
+    store.insert("input", json!("hello"));
 
     let result = node.run(&store);
     match result {
@@ -32,7 +33,10 @@ struct SimpleNode;
 
 impl BaseNode for SimpleNode {
     fn prep(&self, shared: &SharedStore) -> Result<PrepResult> {
-        let input = shared.get_json::<String>("input").unwrap_or_default();
+        let input = shared
+            .get::<serde_json::Value>("input")
+            .and_then(|json_val| serde_json::from_value::<String>(json_val).ok())
+            .unwrap_or_default();
         Ok(serde_json::Value::String(input).into())
     }
 
@@ -63,7 +67,7 @@ impl BaseNode for SimpleNode {
 fn test_run_node() {
     let node = SimpleNode;
     let store = SharedStore::new();
-    store.insert_json("input", "hello");
+    store.insert("input", json!("hello"));
 
     let result = node.run(&store);
     match result {

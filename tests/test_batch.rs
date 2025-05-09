@@ -40,7 +40,7 @@ fn test_batch_sequential() {
     let mut stores = Vec::new();
     for i in 0..3 {
         let store = SharedStore::new();
-        store.insert_json("index", i);
+        store.insert("index", serde_json::json!(i));
         stores.push(store);
     }
 
@@ -67,7 +67,7 @@ fn test_batch_node() {
     let mut stores = Vec::new();
     for i in 0..3 {
         let store = SharedStore::new();
-        store.insert_json("index", i);
+        store.insert("index", serde_json::json!(i));
         stores.push(store);
     }
 
@@ -85,7 +85,10 @@ struct ClassifierNode;
 
 impl BaseNode for ClassifierNode {
     fn prep(&self, shared: &SharedStore) -> Result<PrepResult> {
-        let value = shared.get_json::<i32>("value").unwrap_or(0);
+        let value = shared
+            .get::<serde_json::Value>("value")
+            .and_then(|json_val| serde_json::from_value::<i32>(json_val).ok())
+            .unwrap_or(0);
         Ok(serde_json::json!({"value": value}).into())
     }
 
@@ -162,7 +165,7 @@ fn test_batch_flow() {
     let mut stores = Vec::new();
     for i in 0..4 {
         let store = SharedStore::new();
-        store.insert_json("value", i);
+        store.insert("value", serde_json::json!(i));
         stores.push(store);
     }
 
