@@ -123,7 +123,7 @@ fn main() -> Result<()> {
     flow.add_transition("continue", chat_node);
 
     // Start the chat
-    let shared = SharedStore::new();
+    let shared = SharedStore::new_in_memory();
     flow.run(&shared)?;
 
     Ok(())

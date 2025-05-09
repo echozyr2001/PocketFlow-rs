@@ -16,7 +16,7 @@ impl BaseNode for DefaultNode {}
 #[test]
 fn test_default_node() {
     let node = DefaultNode;
-    let store = SharedStore::new();
+    let store = SharedStore::new_in_memory();
     store.insert("input", json!("hello"));
 
     let result = node.run(&store);
@@ -66,7 +66,7 @@ impl BaseNode for SimpleNode {
 #[test]
 fn test_run_node() {
     let node = SimpleNode;
-    let store = SharedStore::new();
+    let store = SharedStore::new_in_memory();
     store.insert("input", json!("hello"));
 
     let result = node.run(&store);
@@ -127,7 +127,7 @@ fn test_retryable_node_retries_and_succeeds() {
     let node = RetryOnceNode {
         attempts: Mutex::new(0),
     };
-    let store = SharedStore::new();
+    let store = SharedStore::new_in_memory();
 
     let result = node.run(&store);
     match result {
@@ -163,7 +163,7 @@ impl RetryableNode for AlwaysFailNode {
 #[test]
 fn test_retryable_node_fails_all_attempts() {
     let node = AlwaysFailNode;
-    let store = SharedStore::new();
+    let store = SharedStore::new_in_memory();
 
     let result = node.run(&store);
     assert!(result.is_err());

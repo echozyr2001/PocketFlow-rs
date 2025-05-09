@@ -60,7 +60,7 @@ impl BaseNode for AnswerNode {
 
 fn main() -> Result<()> {
     // Create a shared store with initial data
-    let shared = SharedStore::new();
+    let shared = SharedStore::new_in_memory();
     shared.insert(
         "question",
         json!("In one sentence, what's the end of universe?"),

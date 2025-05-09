@@ -3,7 +3,7 @@ use serde_json::{Value as JsonValue, json};
 
 #[test]
 fn test_shared_store_operations() {
-    let store = SharedStore::new();
+    let store = SharedStore::new_in_memory();
 
     // Test inserting and getting a String (via JsonValue)
     let val_str = json!("value1");
@@ -47,7 +47,7 @@ fn test_shared_store_operations() {
 
 #[test]
 fn test_params() {
-    let mut params = Params::new();
+    let mut params = Params::new(); // Params::new() is not changed
     params.set("filename", "test.txt").unwrap();
     assert_eq!(
         params.get::<String>("filename"),

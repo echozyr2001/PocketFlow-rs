@@ -38,7 +38,7 @@ fn test_flow_action_transition() {
 
     let go = Arc::new(GoNode);
     let end = Arc::new(EndNode);
-    let shared = SharedStore::new();
+    let shared = SharedStore::new_in_memory();
     let mut flow = Flow::new(Some(go));
     flow.add_transition("go", end);
     let result = flow.run(&shared);
@@ -105,7 +105,7 @@ fn test_flow_nested() {
     let node3 = Arc::new(Node3);
     let mut outer = Flow::new(Some(Arc::new(inner)));
     outer.add_transition("done", node3.clone());
-    let shared = SharedStore::new();
+    let shared = SharedStore::new_in_memory();
     let result = outer.run(&shared).unwrap();
     assert_eq!(result, "outer_done".into());
 }

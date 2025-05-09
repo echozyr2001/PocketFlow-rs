@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use serde_json::json;
+use std::sync::Arc; // Added for json! macro
 
 use pocketflow_rs::{
     communication::SharedStore,
@@ -39,8 +40,8 @@ fn test_batch_sequential() {
 
     let mut stores = Vec::new();
     for i in 0..3 {
-        let store = SharedStore::new();
-        store.insert("index", serde_json::json!(i));
+        let store = SharedStore::new_in_memory();
+        store.insert("index", json!(i));
         stores.push(store);
     }
 
@@ -66,13 +67,13 @@ fn test_batch_node() {
 
     let mut stores = Vec::new();
     for i in 0..3 {
-        let store = SharedStore::new();
-        store.insert("index", serde_json::json!(i));
+        let store = SharedStore::new_in_memory();
+        store.insert("index", json!(i));
         stores.push(store);
     }
 
     let batch_node = BatchNode::new(processor, stores);
-    let shared = SharedStore::new();
+    let shared = SharedStore::new_in_memory();
 
     let result = batch_node.run(&shared).unwrap();
     assert_eq!(result, "batch_complete".into());
@@ -164,8 +165,8 @@ fn test_batch_flow() {
     // Create test data
     let mut stores = Vec::new();
     for i in 0..4 {
-        let store = SharedStore::new();
-        store.insert("value", serde_json::json!(i));
+        let store = SharedStore::new_in_memory();
+        store.insert("value", json!(i));
         stores.push(store);
     }
 
