@@ -25,6 +25,4 @@ parking_lot = "0.12"
 [dev-dependencies]
 utils = { path = "./utils" }
 tokio-test = "0.4"
-dotenvy = "0.15"
-openai_api_rust = { path = "./openai-api" }
 openai = "1.1.0"
