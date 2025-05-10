@@ -1,10 +1,14 @@
-use anyhow::anyhow;
+use anyhow::{Result, anyhow};
 use std::{collections::HashMap, sync::Arc};
 
-use super::{Action, ExecResult, PrepResult, Result, communication::SharedStore, node::BaseNode};
+use super::{
+    communication::{BaseSharedStore, SharedStore},
+    node::NodeTrait,
+    r#type::{ExecResult, PostResult, PrepResult},
+};
 
 pub struct BatchProcessor {
-    nodes: Vec<Arc<dyn BaseNode>>,
+    nodes: Vec<Arc<dyn NodeTrait>>,
 }
 
 impl Default for BatchProcessor {
@@ -20,13 +24,16 @@ impl BatchProcessor {
     }
 
     /// Add a node to the batch processor
-    pub fn add_node(&mut self, node: Arc<dyn BaseNode>) -> &mut Self {
+    pub fn add_node(&mut self, node: Arc<dyn NodeTrait>) -> &mut Self {
         self.nodes.push(node);
         self
     }
 
     /// Process items in sequence (one after another)
-    pub fn process_sequential(&self, shared_stores: Vec<SharedStore>) -> Vec<Result<Action>> {
+    pub fn process_sequential(
+        &self,
+        shared_stores: Vec<BaseSharedStore>,
+    ) -> Vec<Result<PostResult>> {
         shared_stores
             .into_iter()
             .map(|store| self.process_single(&store))
@@ -34,39 +41,24 @@ impl BatchProcessor {
     }
 
     /// Process a single item through all nodes
-    pub fn process_single(&self, shared: &SharedStore) -> Result<Action> {
+    pub fn process_single(&self, shared: &BaseSharedStore) -> Result<PostResult> {
         if self.nodes.is_empty() {
             return Err(anyhow!("No nodes to process"));
         }
 
-        // Run all nodes in sequence, storing intermediate results
         let mut results = Vec::new();
         for node in &self.nodes {
-            results.push(node.run(shared)?);
+            results.push(node.run_sync(shared)?);
         }
 
-        // Return the action from the last node
-        Ok(*results.last().unwrap())
+        results
+            .last()
+            .cloned()
+            .ok_or_else(|| anyhow!("No results from node processing"))
     }
 
     /// Process items in parallel
-    pub fn process_parallel(&self, shared_stores: Vec<SharedStore>) -> Vec<Result<Action>> {
-        // // Only include rayon if BaseNode is Send + Sync
-        // #[cfg(feature = "parallel")]
-        // {
-        //     use rayon::prelude::*;
-        //     return shared_stores
-        //         .into_par_iter()
-        //         .map(|store| self.process_single(&store))
-        //         .collect();
-        // }
-
-        // // Fallback to sequential processing if parallel feature is disabled
-        // #[cfg(not(feature = "parallel"))]
-        // {
-        //     self.process_sequential(shared_stores)
-        // }
-
+    pub fn process_parallel(&self, shared_stores: Vec<BaseSharedStore>) -> Vec<Result<PostResult>> {
         use rayon::prelude::*;
         shared_stores
             .into_par_iter()
@@ -74,116 +66,123 @@ impl BatchProcessor {
             .collect()
     }
 
-    /// Group results by action
+    /// Group results by action string from PostResult
     pub fn group_results_by_action(
         &self,
-        results: Vec<Result<Action>>,
+        results: &[Result<PostResult>],
     ) -> HashMap<String, Vec<usize>> {
         let mut grouped: HashMap<String, Vec<usize>> = HashMap::new();
 
         for (idx, result) in results.iter().enumerate() {
-            if let Ok(action) = result {
-                if let Some(act) = action.0 {
-                    grouped.entry(act.to_string()).or_default().push(idx);
+            if let Ok(post_result) = result {
+                let action_str = post_result.as_str();
+                if action_str.is_empty() {
+                    grouped
+                        .entry("default_empty_post_result".to_string())
+                        .or_default()
+                        .push(idx);
                 } else {
-                    grouped.entry("none".to_string()).or_default().push(idx);
+                    grouped.entry(action_str.to_string()).or_default().push(idx);
                 }
             } else {
                 grouped.entry("error".to_string()).or_default().push(idx);
             }
         }
-
         grouped
     }
 }
 
-/// BatchNode wraps a BatchProcessor as a BaseNode
+/// BatchNode wraps a BatchProcessor as a NodeTrait
 pub struct BatchNode {
     processor: BatchProcessor,
-    stores: Vec<SharedStore>,
+    stores: Vec<BaseSharedStore>,
 }
 
 impl BatchNode {
     /// Create a new BatchNode
-    pub fn new(processor: BatchProcessor, stores: Vec<SharedStore>) -> Self {
+    pub fn new(processor: BatchProcessor, stores: Vec<BaseSharedStore>) -> Self {
         Self { processor, stores }
     }
 
     /// Get the batch results
-    pub fn get_results(&self) -> Vec<Result<Action>> {
+    pub fn get_results(&self) -> Vec<Result<PostResult>> {
         self.processor.process_sequential(self.stores.clone())
     }
 }
 
-impl BaseNode for BatchNode {
-    fn prep(&self, _shared: &SharedStore) -> Result<PrepResult> {
-        // Prepare batch data structure
+#[async_trait::async_trait]
+impl NodeTrait for BatchNode {
+    fn prep(&self, _shared_store: &dyn SharedStore) -> Result<PrepResult> {
         Ok(Default::default())
     }
 
     fn exec(&self, _prep_res: &PrepResult) -> Result<ExecResult> {
-        // Perform batch processing, but don't return the actual results here
-        // Just indicate that processing was done
         let _results = self.processor.process_sequential(self.stores.clone());
         Ok(Default::default())
     }
 
     fn post(
         &self,
-        _shared: &SharedStore,
+        _shared_store: &dyn SharedStore,
         _prep_res: &PrepResult,
         _exec_res: &ExecResult,
-    ) -> Result<Action> {
-        // Just signal completion
-        Ok("batch_complete".into())
+    ) -> Result<PostResult> {
+        Ok(PostResult::from("batch_complete"))
     }
 }
 
 /// BatchFlow combines batch processing with flow-based transitions
 pub struct BatchFlow {
     processor: BatchProcessor,
-    flows: Vec<Arc<dyn BaseNode>>,
-    transition_map: HashMap<String, usize>,
+    flow_transitions: HashMap<String, Arc<dyn NodeTrait>>,
 }
 
 impl BatchFlow {
-    /// Create a new BatchFlow
     pub fn new(processor: BatchProcessor) -> Self {
         Self {
             processor,
-            flows: Vec::new(),
-            transition_map: HashMap::new(),
+            flow_transitions: HashMap::new(),
         }
     }
 
-    /// Add a flow with associated action
-    pub fn add_flow(&mut self, action: &str, flow: Arc<dyn BaseNode>) -> &mut Self {
-        self.transition_map
-            .insert(action.to_string(), self.flows.len());
-        self.flows.push(flow);
+    pub fn add_flow(&mut self, action_key: &str, flow_node: Arc<dyn NodeTrait>) -> &mut Self {
+        self.flow_transitions
+            .insert(action_key.to_string(), flow_node);
         self
     }
-    /// Process batch and route results to appropriate flows
-    pub fn process(&self, stores: Vec<SharedStore>) -> HashMap<String, Vec<Result<Action>>> {
-        let batch_results = self.processor.process_sequential(stores.clone());
-        let grouped = self.processor.group_results_by_action(batch_results);
 
-        let mut flow_results: HashMap<String, Vec<Result<Action>>> = HashMap::new();
+    pub fn process(
+        &self,
+        stores: Vec<BaseSharedStore>,
+    ) -> HashMap<String, Vec<Result<PostResult>>> {
+        let batch_post_results = self.processor.process_sequential(stores.clone());
 
-        for (action, indices) in grouped {
-            if let Some(&flow_idx) = self.transition_map.get(&action) {
-                let flow = &self.flows[flow_idx];
-
-                // Process each item with the matching flow
-                for idx in indices {
-                    if idx < stores.len() {
-                        let result = flow.run(&stores[idx]);
-                        flow_results.entry(action.clone()).or_default().push(result);
-                    }
-                }
+        let mut grouped_indices_by_action: HashMap<String, Vec<usize>> = HashMap::new();
+        for (idx, res) in batch_post_results.iter().enumerate() {
+            if let Ok(post_result) = res {
+                grouped_indices_by_action
+                    .entry(post_result.as_str().to_string())
+                    .or_default()
+                    .push(idx);
+            } else {
+                // Errors from batch_processor are not passed to sub-flows for now.
             }
         }
 
-        flow_results
+        let mut final_flow_results: HashMap<String, Vec<Result<PostResult>>> = HashMap::new();
+
+        for (action_key, indices) in grouped_indices_by_action {
+            if let Some(flow_to_run) = self.flow_transitions.get(&action_key) {
+                let mut results_for_this_flow: Vec<Result<PostResult>> = Vec::new();
+                for &original_store_idx in &indices {
+                    if original_store_idx < stores.len() {
+                        let item_store = &stores[original_store_idx];
+                        results_for_this_flow.push(flow_to_run.run_sync(item_store));
+                    }
+                }
+                final_flow_results.insert(action_key, results_for_this_flow);
+            }
+        }
+        final_flow_results
     }
 }

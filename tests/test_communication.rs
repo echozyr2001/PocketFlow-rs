@@ -1,9 +1,9 @@
-use pocketflow_rs::communication::{Params, SharedStore};
+use pocketflow_rs::communication::{BaseSharedStore, Params};
 use serde_json::{Value as JsonValue, json};
 
 #[test]
 fn test_shared_store_operations() {
-    let store = SharedStore::new_in_memory();
+    let store = BaseSharedStore::new_in_memory();
 
     // Test inserting and getting a String (via JsonValue)
     let val_str = json!("value1");

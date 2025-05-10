@@ -59,6 +59,32 @@ impl PrepResult {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct PostResult(String);
+
+impl From<String> for PostResult {
+    fn from(value: String) -> Self {
+        PostResult(value)
+    }
+}
+
+impl From<&str> for PostResult {
+    fn from(value: &str) -> Self {
+        PostResult(value.to_string())
+    }
+}
+
+impl PostResult {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    // Helper for common "stop" or "end" condition, if needed.
+    // pub fn is_stop_signal(&self) -> bool {
+    //     self.0.eq_ignore_ascii_case("stop") || self.0.eq_ignore_ascii_case("end")
+    // }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ExecResult(Value);
 
