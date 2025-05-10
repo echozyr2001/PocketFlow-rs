@@ -1,32 +1,29 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use openai::chat::{ChatCompletionMessage, ChatCompletionMessageRole};
 use pocketflow_rs::core::{
     ExecResult, PostResult, PrepResult,
     communication::{BaseSharedStore, SharedStore},
     flow::Flow,
     node::NodeTrait,
 };
-use serde_json::{Value as JsonValue, json}; // Ensure JsonValue is in scope
+use serde_json::{Value as JsonValue, json};
 use std::sync::Arc;
+use utils::{StreamLlmOptions, call_llm_streaming};
 
-#[path = "../utils/mod.rs"]
-mod utils;
-use utils::call_llm_chat;
-
-// Define an AnswerNode similar to the Python example
-struct AnswerNode;
+struct QANode;
 
 #[async_trait]
-impl NodeTrait for AnswerNode {
-    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+impl NodeTrait for QANode {
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
         // Extract the question from shared storage
         let question_json_val = shared_store
-            .get_value("question") // Use trait method, returns Option<StoredValue>
+            .get_value("question")
             .ok_or_else(|| anyhow::anyhow!("Question StoredValue not found in shared store"))?;
 
         let question_json = question_json_val
-            .downcast_ref::<JsonValue>() // Option<&JsonValue>
-            .cloned() // Option<JsonValue>
+            .downcast_ref::<JsonValue>()
+            .cloned()
             .ok_or_else(|| anyhow::anyhow!("Question StoredValue is not a JsonValue"))?;
 
         let question: String = serde_json::from_value(question_json)
@@ -35,24 +32,46 @@ impl NodeTrait for AnswerNode {
         Ok(PrepResult::from(json!(question)))
     }
 
-    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
-        // Get the question from prep_res and call the LLM
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        // Get the question from prep_res and stream the LLM response
         let question = prep_res
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Question not found in prep result"))?;
 
-        let messages = vec![openai_api_rust::Message {
-            role: openai_api_rust::Role::User,
-            content: question.to_string(),
-        }];
-        let answer = call_llm_chat(&messages, None)?;
+        let messages = vec![
+            ChatCompletionMessage {
+                role: ChatCompletionMessageRole::System,
+                content: Some("You provide concise and informative answers.".to_string()),
+                name: None,
+                function_call: None,
+                tool_calls: None,
+                tool_call_id: None,
+            },
+            ChatCompletionMessage {
+                role: ChatCompletionMessageRole::User,
+                content: Some(question.to_string()),
+                name: None,
+                function_call: None,
+                tool_calls: None,
+                tool_call_id: None,
+            },
+        ];
+
+        // Create streaming options with printing enabled
+        let options = StreamLlmOptions {
+            print_stream: true,
+            ..Default::default()
+        };
+
+        // Call LLM with streaming using the utility function
+        let answer = call_llm_streaming(messages, Some(options)).await?;
 
         Ok(ExecResult::from(json!(answer)))
     }
 
-    fn post(
+    async fn post_async(
         &self,
-        shared_store: &dyn SharedStore, // Use &dyn SharedStore trait
+        shared_store: &dyn SharedStore,
         _prep_res: &PrepResult,
         exec_res: &ExecResult,
     ) -> Result<PostResult> {
@@ -63,43 +82,27 @@ impl NodeTrait for AnswerNode {
 
         // Insert the answer into shared store using trait method
         shared_store.insert_value("answer", Arc::new(json!(answer)));
-        Ok(PostResult::default()) // Return PostResult
+        Ok(PostResult::default())
     }
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Create a shared store with initial data
-    let shared = BaseSharedStore::new_in_memory(); // Use BaseSharedStore for instantiation
+    let shared = BaseSharedStore::new_in_memory();
+
+    const QUESTION: &str = "In one sentence, what is the end of universe?";
+    println!("Question: {}", QUESTION);
 
     // Use BaseSharedStore's generic insert method for convenience here
-    shared.insert(
-        "question",
-        json!("In one sentence, what's the end of universe?"),
-    );
+    shared.insert("question", json!(QUESTION));
 
     // Create the node and flow
-    let answer_node_arc = Arc::new(AnswerNode {}); // Arc<dyn NodeTrait>
-    let qa_flow = Flow::new(Some(answer_node_arc));
+    let qa_node_arc = Arc::new(QANode {});
+    let qa_flow = Flow::new(Some(qa_node_arc));
 
-    // Run the flow, passing &shared which implements &dyn SharedStore
-    qa_flow.run(&shared)?;
-
-    // Print the results using BaseSharedStore's generic get method
-    println!(
-        "Question: {}",
-        shared // This is BaseSharedStore, so .get<T>() is available
-            .get::<JsonValue>("question")
-            .and_then(|jv| serde_json::from_value::<String>(jv).ok())
-            .unwrap_or_else(|| "Question not found".to_string())
-    );
-
-    println!(
-        "Answer: {}",
-        shared // This is BaseSharedStore
-            .get::<JsonValue>("answer")
-            .and_then(|jv| serde_json::from_value::<String>(jv).ok())
-            .unwrap_or_else(|| "Answer not found".to_string())
-    );
+    // Run the flow asynchronously
+    qa_flow.run_async(&shared).await?;
 
     Ok(())
 }
