@@ -41,7 +41,7 @@ fn test_default_node() {
     // Since 'store' is a BaseSharedStore, we can use its convenient generic insert.
     store.insert("input", json!("hello"));
 
-    let result = node.run_sync(&store); // Pass &store which impls &dyn SharedStore
+    let result = node.run(&store); // Pass &store which impls &dyn SharedStore
     match result {
         Ok(post_res) => assert_eq!(post_res, PostResult::from(DEFAULT_POST_RESULT_VAL)),
         Err(e) => panic!("Expected success, but got error: {}", e),
@@ -97,7 +97,7 @@ fn test_run_node() {
     let store = BaseSharedStore::new_in_memory();
     store.insert("input", json!("hello")); // Uses BaseSharedStore's generic insert
 
-    let result = node.run_sync(&store); // Pass &store which impls &dyn SharedStore
+    let result = node.run(&store); // Pass &store which impls &dyn SharedStore
     match result {
         Ok(post_res) => assert_eq!(post_res, PostResult::from("len=5")),
         Err(e) => panic!("Expected success, but got error: {}", e),
@@ -149,7 +149,7 @@ impl NodeTrait for RetryOnceNode {
             Err(anyhow::anyhow!("Expected number in exec_res"))
         }
     }
-    // run_sync will be inherited from NodeTrait default
+    // run will be inherited from NodeTrait default
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn test_retryable_node_retries_and_succeeds() {
     };
     let store = BaseSharedStore::new_in_memory();
 
-    let result = node.run_sync(&store);
+    let result = node.run(&store);
     match result {
         Ok(post_res) => assert_eq!(post_res, PostResult::from("attempts=1")), // Should succeed on 2nd attempt (attempts becomes 1)
         Err(e) => panic!("Expected success, but got error: {}", e),
@@ -188,7 +188,7 @@ impl NodeTrait for AlwaysFailNode {
             execution_logic()
         }
     }
-    // run_sync will be inherited
+    // run will be inherited
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn test_retryable_node_fails_all_attempts() {
     };
     let store = BaseSharedStore::new_in_memory();
 
-    let result = node.run_sync(&store);
+    let result = node.run(&store);
     assert!(result.is_err());
     if let Err(e) = result {
         assert_eq!(e.to_string(), "boom");

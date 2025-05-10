@@ -88,8 +88,8 @@ fn test_batch_node() {
     // batch_node.run might also expect Action.
     // Assuming it returns something convertible or will be updated.
     // Original: result = batch_node.run(&shared).unwrap(); (Action)
-    // BatchNode implements NodeTrait, so run_sync returns Result<PostResult>
-    let result = batch_node.run_sync(&shared).unwrap();
+    // BatchNode implements NodeTrait, so run returns Result<PostResult>
+    let result = batch_node.run(&shared).unwrap();
 
     assert_eq!(result, PostResult::from("batch_complete"));
 

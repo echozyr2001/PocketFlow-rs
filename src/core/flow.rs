@@ -30,7 +30,7 @@ impl Flow {
     // If Flow needs to help wire nodes, it would be done externally before passing start_node.
 
     /// Run the flow synchronously.
-    /// The flow proceeds by calling `run_sync` on the current node,
+    /// The flow proceeds by calling `run` on the current node,
     /// then using `get_successor` on that same node with the `PostResult`
     /// to determine the next node.
     /// The flow terminates when a node has no successor for the given `PostResult`,
@@ -44,7 +44,7 @@ impl Flow {
             // Current NodeTrait methods don't take Params directly.
             // Nodes might access params from SharedStore if they are put there.
 
-            let post_result = current_node.run_sync(shared_store)?;
+            let post_result = current_node.run(shared_store)?;
             last_post_result = post_result.clone(); // Clone for the loop and potential return
 
             if let Some(action_str) = last_post_result.as_str().non_empty_or_none() {
@@ -128,7 +128,7 @@ impl NodeTrait for Flow {
         // The primary way to run a flow is via its run() or run_async() methods.
         // If a Flow is a node, its "execution" is its entire run.
         // The PostResult of the Flow's run becomes the "action" for the outer flow.
-        // This suggests that the run_sync/run_async methods of NodeTrait are more suitable here.
+        // This suggests that the run/run_async methods of NodeTrait are more suitable here.
         // For now, let's make exec a no-op, as the main execution is handled by post.
         Ok(ExecResult::default())
     }

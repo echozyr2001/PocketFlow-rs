@@ -151,7 +151,7 @@ fn test_flow_nested() {
 
     #[async_trait]
     impl NodeTrait for FlowWrapperNode {
-        fn run_sync(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
+        fn run(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
             self.flow_to_run.run(shared_store)
         }
         async fn run_async(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
@@ -177,7 +177,7 @@ fn test_flow_nested() {
     // outer.add_transition("done", n3_arc.clone()); // This was the old way
 
     let shared = BaseSharedStore::new_in_memory();
-    let result = outer.run(&shared).unwrap(); // outer.run will execute wrapped_inner_flow.run_sync, which runs inner_flow.
+    let result = outer.run(&shared).unwrap(); // outer.run will execute wrapped_inner_flow.run, which runs inner_flow.
     // inner_flow finishes with "done".
     // wrapped_inner_flow.get_successor("done") returns n3_arc.
     // outer flow continues with n3_arc.

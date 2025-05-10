@@ -48,7 +48,7 @@ impl BatchProcessor {
 
         let mut results = Vec::new();
         for node in &self.nodes {
-            results.push(node.run_sync(shared)?);
+            results.push(node.run(shared)?);
         }
 
         results
@@ -177,7 +177,7 @@ impl BatchFlow {
                 for &original_store_idx in &indices {
                     if original_store_idx < stores.len() {
                         let item_store = &stores[original_store_idx];
-                        results_for_this_flow.push(flow_to_run.run_sync(item_store));
+                        results_for_this_flow.push(flow_to_run.run(item_store));
                     }
                 }
                 final_flow_results.insert(action_key, results_for_this_flow);

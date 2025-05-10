@@ -57,7 +57,7 @@ pub trait NodeTrait: Send + Sync {
     }
 
     // Default run methods
-    fn run_sync(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
+    fn run(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
         let prep_res = self.prep(shared_store)?;
         let exec_res = self.exec(&prep_res)?;
         self.post(shared_store, &prep_res, &exec_res)
