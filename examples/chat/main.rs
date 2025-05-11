@@ -33,11 +33,11 @@ impl NodeTrait for StreamingChatNode {
 
     fn post(
         &self,
-        _shared_store: &dyn SharedStore,
-        _prep_res: &PrepResult,
-        _exec_res: &ExecResult,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
     ) -> Result<PostResult> {
-        Ok(PostResult::default())
+        self.base.post(shared_store, prep_res, exec_res)
     }
 
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
@@ -159,27 +159,18 @@ impl NodeTrait for StreamingChatNode {
 
         Ok(PostResult::from("continue"))
     }
-
-    // fn add_successor(&mut self, action: String, node: Arc<dyn NodeTrait>) {
-    //     self.base.add_successor(action, node)
-    // }
-
-    // fn get_successor(&self, action: &str) -> Option<Arc<dyn NodeTrait>> {
-    //     self.base.get_successor(action)
-    // }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let chat_node = StreamingChatNode {
-        base: BaseNode::new(),
-    };
-
-    let mut flow = Flow::new(Some(Arc::new(chat_node.clone())));
-    flow.add_transition("continue".into(), Arc::new(chat_node));
-
     let shared = BaseSharedStore::new_in_memory();
-    flow.run_async(&shared).await?; // Use run_async for async execution
+
+    let chat_node = Arc::new(StreamingChatNode {
+        base: BaseNode::new(),
+    });
+    let mut flow = Flow::new(Some(chat_node.clone()));
+    flow.add_transition("continue".into(), chat_node);
+    flow.run_async(&shared).await?;
 
     Ok(())
 }

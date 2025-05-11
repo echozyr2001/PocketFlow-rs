@@ -6,7 +6,7 @@ use pocketflow_rs::{
     node::BaseNode,
 };
 use serde_json::Value as JsonValue;
-use std::sync::Arc; // For Node3
+use std::sync::Arc;
 
 // ------------------------------------
 // 1. Simple Flow: action transition
@@ -72,7 +72,7 @@ impl NodeTrait for EndNode {
         _prep_res: &PrepResult,
         _exec_res: &ExecResult,
     ) -> Result<PostResult> {
-        Ok(PostResult::from("end")) // This is the final action
+        Ok(PostResult::from("end"))
     }
 
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
@@ -91,24 +91,22 @@ impl NodeTrait for EndNode {
     ) -> Result<PostResult> {
         self.post(shared_store, prep_res, exec_res)
     }
-    // get_successor returns None by default
 }
 
 #[test]
 fn test_flow_action_transition() {
-    let end_node_arc = Arc::new(EndNode {
+    let go_node = Arc::new(GoNode {
         base: BaseNode::new(),
     });
-    let go_node_arc = Arc::new(GoNode {
+    let end_node = Arc::new(EndNode {
         base: BaseNode::new(),
     });
 
     let shared = BaseSharedStore::new_in_memory();
-    let mut flow = Flow::new(Some(go_node_arc));
-    flow.add_transition("go".into(), end_node_arc.clone()); // This is the old way, now removed
-    // flow.add_transition is removed. Successors are part of nodes.
+    let mut flow = Flow::new(Some(go_node));
+    flow.add_transition("go".into(), end_node);
 
-    let result = flow.run(&shared); // Flow::run now uses node.get_successor
+    let result = flow.run(&shared);
     match result {
         Ok(post_res) => assert_eq!(post_res, PostResult::from("end")),
         Err(e) => panic!("Expected success, but got error: {}", e),
@@ -179,7 +177,7 @@ impl NodeTrait for Node2 {
         _prep_res: &PrepResult,
         _exec_res: &ExecResult,
     ) -> Result<PostResult> {
-        Ok(PostResult::from("done")) // This is the final action of the inner flow
+        Ok(PostResult::from("done"))
     }
 
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
@@ -246,34 +244,25 @@ impl NodeTrait for Node3 {
 
 #[test]
 fn test_flow_nested() {
-    let n2_arc = Arc::new(Node2 {
+    let node1 = Arc::new(Node1 {
         base: BaseNode::new(),
     });
-    let n1_arc = Arc::new(Node1 {
+    let node2 = Arc::new(Node2 {
         base: BaseNode::new(),
     });
 
     // Inner flow definition
-    let mut inner_flow = Flow::new(Some(n1_arc));
-    inner_flow.add_transition("next".into(), n2_arc.clone()); // This was the old way
-    // No add_transition for inner_flow, Node1 handles its successor.
+    let mut inner_flow = Flow::new(Some(node1));
+    inner_flow.add_transition("next".into(), node2);
 
-    let n3_arc = Arc::new(Node3 {
+    let node3 = Arc::new(Node3 {
         base: BaseNode::new(),
     });
 
-    let inner_flow_arc = Arc::new(inner_flow);
-
-    let mut outer = Flow::new(Some(inner_flow_arc));
-    outer.add_transition("done".into(), n3_arc.clone()); // This was the old way
-    // outer.add_transition("done", n3_arc.clone()); // This was the old way
+    let mut outer = Flow::new(Some(Arc::new(inner_flow)));
+    outer.add_transition("done".into(), node3);
 
     let shared = BaseSharedStore::new_in_memory();
-    let result = outer.run(&shared).unwrap(); // outer.run will execute wrapped_inner_flow.run, which runs inner_flow.
-    // inner_flow finishes with "done".
-    // wrapped_inner_flow.get_successor("done") returns n3_arc.
-    // outer flow continues with n3_arc.
-    // n3_arc runs, its post returns "outer_done".
-    // n3_arc.get_successor("outer_done") is None, so flow ends.
+    let result = outer.run(&shared).unwrap();
     assert_eq!(result, PostResult::from("outer_done"));
 }

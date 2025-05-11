@@ -11,9 +11,6 @@ use pocketflow_rs::{
 };
 use serde_json::{Value as JsonValue, json};
 
-// Define a default PostResult for comparison, if needed for tests
-const DEFAULT_POST_RESULT_VAL: &str = "default_node_action";
-
 // ------------------------------------
 // 1. Default Node: get default action
 // ------------------------------------
@@ -31,14 +28,13 @@ impl NodeTrait for DefaultNode {
         self.base.exec(prep_res)
     }
 
-    // Override post to return a specific default if needed, otherwise NodeTrait's default is PostResult("")
     fn post(
         &self,
-        _shared_store: &dyn SharedStore,
-        _prep_res: &PrepResult,
-        _exec_res: &ExecResult,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
     ) -> Result<PostResult> {
-        Ok(PostResult::from(DEFAULT_POST_RESULT_VAL))
+        self.base.post(shared_store, prep_res, exec_res)
     }
 
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
@@ -64,16 +60,12 @@ fn test_default_node() {
     let node = DefaultNode {
         base: BaseNode::new(),
     };
-    let store = BaseSharedStore::new_in_memory(); // Use BaseSharedStore for instantiation
-    // store.insert("input", json!("hello")); // BaseSharedStore struct has generic insert
-    // For &dyn SharedStore, we'd use:
-    // store.insert_value("input", Arc::new(json!("hello")));
-    // Since 'store' is a BaseSharedStore, we can use its convenient generic insert.
+    let store = BaseSharedStore::new_in_memory();
     store.insert("input", json!("hello"));
 
-    let result = node.run(&store); // Pass &store which impls &dyn SharedStore
+    let result = node.run(&store);
     match result {
-        Ok(post_res) => assert_eq!(post_res, PostResult::from(DEFAULT_POST_RESULT_VAL)),
+        Ok(post_res) => assert_eq!(post_res, PostResult::default()),
         Err(e) => panic!("Expected success, but got error: {}", e),
     }
 }
@@ -142,9 +134,8 @@ impl NodeTrait for SimpleNode {
 fn test_run_node() {
     let node = SimpleNode;
     let store = BaseSharedStore::new_in_memory();
-    store.insert("input", json!("hello")); // Uses BaseSharedStore's generic insert
-
-    let result = node.run(&store); // Pass &store which impls &dyn SharedStore
+    store.insert("input", json!("hello"));
+    let result = node.run(&store);
     match result {
         Ok(post_res) => assert_eq!(post_res, PostResult::from("len=5")),
         Err(e) => panic!("Expected success, but got error: {}", e),
@@ -218,7 +209,6 @@ impl NodeTrait for RetryOnceNode {
     ) -> Result<PostResult> {
         self.post(shared_store, prep_res, exec_res)
     }
-    // run will be inherited from NodeTrait default
 }
 
 #[test]
@@ -289,7 +279,6 @@ impl NodeTrait for AlwaysFailNode {
     ) -> Result<PostResult> {
         self.post(shared_store, prep_res, exec_res)
     }
-    // run will be inherited
 }
 
 #[test]

@@ -110,22 +110,17 @@ impl NodeTrait for QANode {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Create a shared store with initial data
-    let shared = BaseSharedStore::new_in_memory();
-
     const QUESTION: &str = "In one sentence, what is the end of universe?";
-    println!("Question: {}", QUESTION);
 
-    // Use BaseSharedStore's generic insert method for convenience here
+    let shared = BaseSharedStore::new_in_memory();
     shared.insert("question", json!(QUESTION));
 
-    // Create the node and flow
-    let qa_node_arc = Arc::new(QANode {
+    println!("Question: {}", QUESTION);
+
+    let qa_node = Arc::new(QANode {
         base: BaseNode::new(),
     });
-    let qa_flow = Flow::new(Some(qa_node_arc));
-
-    // Run the flow asynchronously
+    let qa_flow = Flow::new(Some(qa_node));
     qa_flow.run_async(&shared).await?;
 
     Ok(())

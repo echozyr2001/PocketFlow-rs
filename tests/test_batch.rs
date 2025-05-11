@@ -72,7 +72,7 @@ fn test_batch_sequential() {
     let mut stores = Vec::new();
     for i in 0..3 {
         let store = BaseSharedStore::new_in_memory();
-        store.insert("index", json!(i)); // BaseSharedStore generic insert
+        store.insert("index", json!(i));
         stores.push(store);
     }
 
@@ -112,7 +112,7 @@ fn test_batch_node() {
     }
 
     let batch_node = BatchNode::new(processor, stores);
-    let shared = BaseSharedStore::new_in_memory(); // Changed to BaseSharedStore
+    let shared = BaseSharedStore::new_in_memory();
 
     // batch_node.run might also expect Action.
     // Assuming it returns something convertible or will be updated.
@@ -161,7 +161,7 @@ impl NodeTrait for ClassifierNode {
                 }
             }
         }
-        Ok(PostResult::default()) // Changed from DEFAULT_ACTION
+        Ok(PostResult::default())
     }
 
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
