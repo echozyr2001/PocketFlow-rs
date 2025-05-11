@@ -1,20 +1,42 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use openai::chat::{ChatCompletionMessage, ChatCompletionMessageRole};
-use pocketflow_rs::core::{
-    ExecResult, PostResult, PrepResult,
-    communication::{BaseSharedStore, SharedStore},
-    flow::Flow,
-    node::NodeTrait,
+use pocketflow_rs::{
+    core::{
+        ExecResult, PostResult, PrepResult,
+        communication::{BaseSharedStore, SharedStore},
+        flow::Flow,
+        node::NodeTrait,
+    },
+    node::BaseNode,
 };
 use serde_json::{Value as JsonValue, json};
 use std::sync::Arc;
 use utils::{StreamLlmOptions, call_llm_streaming};
 
-struct QANode;
+struct QANode {
+    base: BaseNode,
+}
 
 #[async_trait]
 impl NodeTrait for QANode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
+    fn post(
+        &self,
+        _shared_store: &dyn SharedStore,
+        _prep_res: &PrepResult,
+        _exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        Ok(PostResult::default())
+    }
+
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
         // Extract the question from shared storage
         let question_json_val = shared_store
@@ -98,7 +120,9 @@ async fn main() -> Result<()> {
     shared.insert("question", json!(QUESTION));
 
     // Create the node and flow
-    let qa_node_arc = Arc::new(QANode {});
+    let qa_node_arc = Arc::new(QANode {
+        base: BaseNode::new(),
+    });
     let qa_flow = Flow::new(Some(qa_node_arc));
 
     // Run the flow asynchronously

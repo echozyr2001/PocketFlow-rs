@@ -129,6 +129,23 @@ impl NodeTrait for BatchNode {
     ) -> Result<PostResult> {
         Ok(PostResult::from("batch_complete"))
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
 /// BatchFlow combines batch processing with flow-based transitions

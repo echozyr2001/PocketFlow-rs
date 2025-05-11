@@ -7,6 +7,7 @@ use pocketflow_rs::{
         ExecResult, PostResult, PrepResult,
         node::{NodeTrait, RetryConfig},
     },
+    node::BaseNode,
 };
 use serde_json::{Value as JsonValue, json};
 
@@ -16,10 +17,20 @@ const DEFAULT_POST_RESULT_VAL: &str = "default_node_action";
 // ------------------------------------
 // 1. Default Node: get default action
 // ------------------------------------
-struct DefaultNode;
+struct DefaultNode {
+    base: BaseNode,
+}
 
 #[async_trait]
 impl NodeTrait for DefaultNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     // Override post to return a specific default if needed, otherwise NodeTrait's default is PostResult("")
     fn post(
         &self,
@@ -29,11 +40,30 @@ impl NodeTrait for DefaultNode {
     ) -> Result<PostResult> {
         Ok(PostResult::from(DEFAULT_POST_RESULT_VAL))
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
 #[test]
 fn test_default_node() {
-    let node = DefaultNode;
+    let node = DefaultNode {
+        base: BaseNode::new(),
+    };
     let store = BaseSharedStore::new_in_memory(); // Use BaseSharedStore for instantiation
     // store.insert("input", json!("hello")); // BaseSharedStore struct has generic insert
     // For &dyn SharedStore, we'd use:
@@ -89,6 +119,23 @@ impl NodeTrait for SimpleNode {
             Err(anyhow::anyhow!("Expected number in exec_res"))
         }
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
 #[test]
@@ -108,12 +155,17 @@ fn test_run_node() {
 // 3. Retryable Node: fails once, then works
 // ------------------------------------
 struct RetryOnceNode {
+    base: BaseNode,
     attempts: Mutex<usize>,
     retry_config: Option<RetryConfig>,
 }
 
 #[async_trait]
 impl NodeTrait for RetryOnceNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
     fn exec(&self, _prep_res: &PrepResult) -> Result<ExecResult> {
         let execution_logic = || {
             let mut guard = self.attempts.lock();
@@ -149,12 +201,30 @@ impl NodeTrait for RetryOnceNode {
             Err(anyhow::anyhow!("Expected number in exec_res"))
         }
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
     // run will be inherited from NodeTrait default
 }
 
 #[test]
 fn test_retryable_node_retries_and_succeeds() {
     let node = RetryOnceNode {
+        base: BaseNode::new(),
         attempts: Mutex::new(0),
         retry_config: Some(RetryConfig::new(3, 0.005)), // 3 total attempts, 5ms wait
     };
@@ -171,11 +241,16 @@ fn test_retryable_node_retries_and_succeeds() {
 // 4. Retryable Node: always fails
 // ------------------------------------
 struct AlwaysFailNode {
+    base: BaseNode,
     retry_config: Option<RetryConfig>,
 }
 
 #[async_trait]
 impl NodeTrait for AlwaysFailNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
     fn exec(&self, _prep_res: &PrepResult) -> Result<ExecResult> {
         let execution_logic = || -> Result<ExecResult> {
             println!("AlwaysFailNode: Exec attempt failing");
@@ -188,12 +263,39 @@ impl NodeTrait for AlwaysFailNode {
             execution_logic()
         }
     }
+
+    fn post(
+        &self,
+        _shared_store: &dyn SharedStore,
+        _prep_res: &PrepResult,
+        _exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        Ok(PostResult::default())
+    }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
     // run will be inherited
 }
 
 #[test]
 fn test_retryable_node_fails_all_attempts() {
     let node = AlwaysFailNode {
+        base: BaseNode::new(),
         retry_config: Some(RetryConfig::new(2, 0.005)), // 2 total attempts
     };
     let store = BaseSharedStore::new_in_memory();

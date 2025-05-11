@@ -11,14 +11,24 @@ use pocketflow_rs::{
         flow::Flow,
         node::NodeTrait,
     },
+    node::BaseNode,
 };
 
 struct TestNode {
+    base: BaseNode,
     name: String,
 }
 
 #[async_trait]
 impl NodeTrait for TestNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     fn post(
         &self,
         _shared_store: &dyn SharedStore,
@@ -26,6 +36,23 @@ impl NodeTrait for TestNode {
         _exec_res: &ExecResult,
     ) -> Result<PostResult> {
         Ok(PostResult::from(self.name.clone()))
+    }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
     }
 }
 
@@ -35,6 +62,7 @@ impl NodeTrait for TestNode {
 #[test]
 fn test_batch_sequential() {
     let node1 = Arc::new(TestNode {
+        base: BaseNode::new(),
         name: "action1".to_string(),
     });
 
@@ -69,6 +97,7 @@ fn test_batch_sequential() {
 #[test]
 fn test_batch_node() {
     let node1 = Arc::new(TestNode {
+        base: BaseNode::new(),
         name: "action1".to_string(),
     });
 
@@ -98,7 +127,9 @@ fn test_batch_node() {
     assert_eq!(results_post.len(), 3);
 }
 
-struct ClassifierNode;
+struct ClassifierNode {
+    base: BaseNode,
+}
 
 #[async_trait]
 impl NodeTrait for ClassifierNode {
@@ -109,6 +140,10 @@ impl NodeTrait for ClassifierNode {
             .and_then(|json_val| serde_json::from_value::<i32>(json_val).ok())
             .unwrap_or(0);
         Ok(json!({"value": value}).into())
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
     }
 
     fn post(
@@ -128,11 +163,39 @@ impl NodeTrait for ClassifierNode {
         }
         Ok(PostResult::default()) // Changed from DEFAULT_ACTION
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
-struct EvenNode;
+struct EvenNode {
+    base: BaseNode,
+}
+
 #[async_trait]
 impl NodeTrait for EvenNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     fn post(
         &self,
         _shared_store: &dyn SharedStore,
@@ -141,11 +204,39 @@ impl NodeTrait for EvenNode {
     ) -> Result<PostResult> {
         Ok(PostResult::from("processed_even"))
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
-struct OddNode;
+struct OddNode {
+    base: BaseNode,
+}
+
 #[async_trait]
 impl NodeTrait for OddNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     fn post(
         &self,
         _shared_store: &dyn SharedStore,
@@ -154,6 +245,23 @@ impl NodeTrait for OddNode {
     ) -> Result<PostResult> {
         Ok(PostResult::from("processed_odd"))
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
 // ------------------------------------
@@ -161,9 +269,15 @@ impl NodeTrait for OddNode {
 // ------------------------------------
 #[test]
 fn test_batch_flow() {
-    let classifier_node = Arc::new(ClassifierNode {}); // Arc<dyn NodeTrait>
-    let even_node = Arc::new(EvenNode {}); // Arc<dyn NodeTrait>
-    let odd_node = Arc::new(OddNode {}); // Arc<dyn NodeTrait>
+    let classifier_node = Arc::new(ClassifierNode {
+        base: BaseNode::new(),
+    }); // Arc<dyn NodeTrait>
+    let even_node = Arc::new(EvenNode {
+        base: BaseNode::new(),
+    }); // Arc<dyn NodeTrait>
+    let odd_node = Arc::new(OddNode {
+        base: BaseNode::new(),
+    }); // Arc<dyn NodeTrait>
 
     let mut processor = BatchProcessor::new();
     processor.add_node(classifier_node); // add_node takes Arc<dyn BaseNode> - this will break

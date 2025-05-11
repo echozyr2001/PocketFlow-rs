@@ -5,14 +5,15 @@ use crate::core::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::Arc;
-// HashMap might not be needed if transitions are fully on nodes.
-// use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+
+use super::node::BaseNode;
 
 /// Flow orchestrates a graph of nodes by following successor logic defined within nodes.
 pub struct Flow {
+    base: BaseNode,
     start_node: Option<Arc<dyn NodeTrait>>,
-    // transitions: HashMap<String, Arc<dyn NodeTrait>>, // Replaced by NodeTrait::get_successor
+    transitions: HashMap<String, Arc<dyn NodeTrait>>,
     params: Params, // Assuming Params is still relevant for a Flow's context
 }
 
@@ -20,22 +21,32 @@ impl Flow {
     /// Create a new Flow with an optional start node.
     pub fn new(start_node: Option<Arc<dyn NodeTrait>>) -> Self {
         Self {
+            base: BaseNode::new(),
             start_node,
-            // transitions: HashMap::new(),
+            transitions: HashMap::new(),
             params: Params::new(), // Flows can have their own params
         }
     }
 
-    // add_transition is removed. Transitions are managed by nodes via NodeTrait::add_successor.
-    // If Flow needs to help wire nodes, it would be done externally before passing start_node.
+    pub fn add_transition(&mut self, action: String, node: Arc<dyn NodeTrait>) {
+        if self.transitions.contains_key(&action) {
+            // log::warn!("Overwriting transitions for action '{}'", action);
+            println!("Overwriting transitions for action '{}'", action);
+        }
+        self.transitions.insert(action, node);
+    }
+
+    pub fn get_transition(&self, action: &str) -> Option<Arc<dyn NodeTrait>> {
+        self.transitions.get(action).cloned()
+    }
 
     /// Run the flow synchronously.
     /// The flow proceeds by calling `run` on the current node,
-    /// then using `get_successor` on that same node with the `PostResult`
+    /// then using `get_transition` on that same node with the `PostResult`
     /// to determine the next node.
     /// The flow terminates when a node has no successor for the given `PostResult`,
     /// returning the last `PostResult`.
-    pub fn run(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
+    fn run_flow(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
         let mut current_node_opt = self.start_node.clone();
         let mut last_post_result = PostResult::default(); // Default if flow doesn't start
 
@@ -48,10 +59,10 @@ impl Flow {
             last_post_result = post_result.clone(); // Clone for the loop and potential return
 
             if let Some(action_str) = last_post_result.as_str().non_empty_or_none() {
-                current_node_opt = current_node.get_successor(action_str);
+                current_node_opt = self.get_transition(action_str);
             } else {
                 // Empty PostResult string, or specific "end" signal might mean flow termination.
-                // Or, get_successor returning None is the only termination condition.
+                // Or, get_transition returning None is the only termination condition.
                 current_node_opt = None;
             }
 
@@ -66,7 +77,7 @@ impl Flow {
     }
 
     /// Run the flow asynchronously.
-    pub async fn run_async(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
+    pub async fn run_flow_async(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
         let mut current_node_opt = self.start_node.clone();
         let mut last_post_result = PostResult::default();
 
@@ -75,7 +86,7 @@ impl Flow {
             last_post_result = post_result.clone();
 
             if let Some(action_str) = last_post_result.as_str().non_empty_or_none() {
-                current_node_opt = current_node.get_successor(action_str);
+                current_node_opt = self.get_transition(action_str);
             } else {
                 current_node_opt = None;
             }
@@ -114,14 +125,15 @@ impl NonEmptyOrNone for &str {
 impl NodeTrait for Flow {
     // prep, exec for a Flow node could initialize its own context or be no-ops
     // if its execution is solely defined by its internal start_node.
-    fn prep(&self, _shared_store: &dyn SharedStore) -> Result<PrepResult> {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
         // A Flow as a node might not have specific prep, or it might set up
         // its internal shared_store context using its self.params.
         // For now, default.
-        Ok(PrepResult::default())
+        // Ok(PrepResult::default())
+        self.base.prep(shared_store)
     }
 
-    fn exec(&self, _prep_res: &PrepResult) -> Result<ExecResult> {
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
         // Executing a Flow as a node means running its internal logic.
         // However, the run methods require a SharedStore.
         // This indicates a slight mismatch: NodeTrait::exec doesn't get SharedStore.
@@ -130,7 +142,8 @@ impl NodeTrait for Flow {
         // The PostResult of the Flow's run becomes the "action" for the outer flow.
         // This suggests that the run/run_async methods of NodeTrait are more suitable here.
         // For now, let's make exec a no-op, as the main execution is handled by post.
-        Ok(ExecResult::default())
+        // Ok(ExecResult::default())
+        self.base.exec(prep_res)
     }
 
     fn post(
@@ -140,7 +153,7 @@ impl NodeTrait for Flow {
         _exec_res: &ExecResult,
     ) -> Result<PostResult> {
         // When a Flow is used as a node, its "result" is the PostResult of its internal run.
-        self.run(shared_store) // Call the Flow's own run method
+        self.run_flow(shared_store) // Call the Flow's own run method
     }
 
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
@@ -158,17 +171,6 @@ impl NodeTrait for Flow {
         _exec_res: &ExecResult,
     ) -> Result<PostResult> {
         // When a Flow is used as a node, its "result" is the PostResult of its internal run.
-        self.run_async(shared_store).await
+        self.run_flow_async(shared_store).await // Call the Flow's own run method
     }
-
-    // Successors for a Flow node would be transitions *from* this entire flow.
-    // This requires Flow to store its own successors if it acts as a node.
-    // This is not implemented yet, as Flow's primary role is to run an internal sequence.
-    // To make Flow fully a NodeTrait that can be part of another Flow's transitions,
-    // it would need its own successor map.
-    // For now, these are no-ops.
-    // fn add_successor(&mut self, _action: String, _node: Arc<dyn NodeTrait>) {}
-    // fn get_successor(&self, _action: &str) -> Option<Arc<dyn NodeTrait>> { None }
 }
-
-// Removed placeholder Params struct

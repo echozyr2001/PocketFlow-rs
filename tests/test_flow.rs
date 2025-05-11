@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use pocketflow_rs::{
     communication::{BaseSharedStore, SharedStore},
     core::{ExecResult, PostResult, PrepResult, flow::Flow, node::NodeTrait},
+    node::BaseNode,
 };
 use serde_json::Value as JsonValue;
 use std::sync::Arc; // For Node3
@@ -12,10 +13,18 @@ use std::sync::Arc; // For Node3
 // ------------------------------------
 
 struct GoNode {
-    next_node: Option<Arc<dyn NodeTrait>>,
+    base: BaseNode,
 }
 #[async_trait]
 impl NodeTrait for GoNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     fn post(
         &self,
         _shared_store: &dyn SharedStore,
@@ -24,18 +33,39 @@ impl NodeTrait for GoNode {
     ) -> Result<PostResult> {
         Ok(PostResult::from("go"))
     }
-    fn get_successor(&self, action: &str) -> Option<Arc<dyn NodeTrait>> {
-        if action == "go" {
-            self.next_node.clone()
-        } else {
-            None
-        }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
     }
 }
 
-struct EndNode;
+struct EndNode {
+    base: BaseNode,
+}
+
 #[async_trait]
 impl NodeTrait for EndNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     fn post(
         &self,
         _shared_store: &dyn SharedStore,
@@ -44,18 +74,38 @@ impl NodeTrait for EndNode {
     ) -> Result<PostResult> {
         Ok(PostResult::from("end")) // This is the final action
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
     // get_successor returns None by default
 }
 
 #[test]
 fn test_flow_action_transition() {
-    let end_node_arc = Arc::new(EndNode);
+    let end_node_arc = Arc::new(EndNode {
+        base: BaseNode::new(),
+    });
     let go_node_arc = Arc::new(GoNode {
-        next_node: Some(end_node_arc),
+        base: BaseNode::new(),
     });
 
     let shared = BaseSharedStore::new_in_memory();
-    let flow = Flow::new(Some(go_node_arc));
+    let mut flow = Flow::new(Some(go_node_arc));
+    flow.add_transition("go".into(), end_node_arc.clone()); // This is the old way, now removed
     // flow.add_transition is removed. Successors are part of nodes.
 
     let result = flow.run(&shared); // Flow::run now uses node.get_successor
@@ -70,10 +120,18 @@ fn test_flow_action_transition() {
 // ------------------------------------
 
 struct Node1 {
-    next_node: Option<Arc<dyn NodeTrait>>,
+    base: BaseNode,
 }
 #[async_trait]
 impl NodeTrait for Node1 {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     fn post(
         &self,
         _shared_store: &dyn SharedStore,
@@ -82,18 +140,39 @@ impl NodeTrait for Node1 {
     ) -> Result<PostResult> {
         Ok(PostResult::from("next"))
     }
-    fn get_successor(&self, action: &str) -> Option<Arc<dyn NodeTrait>> {
-        if action == "next" {
-            self.next_node.clone()
-        } else {
-            None
-        }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
     }
 }
 
-struct Node2;
+struct Node2 {
+    base: BaseNode,
+}
+
 #[async_trait]
 impl NodeTrait for Node2 {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
     fn post(
         &self,
         _shared_store: &dyn SharedStore,
@@ -102,11 +181,35 @@ impl NodeTrait for Node2 {
     ) -> Result<PostResult> {
         Ok(PostResult::from("done")) // This is the final action of the inner flow
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
-struct Node3;
+struct Node3 {
+    base: BaseNode,
+}
+
 #[async_trait]
 impl NodeTrait for Node3 {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
     fn exec(&self, _prep_res: &PrepResult) -> Result<ExecResult> {
         Ok(JsonValue::String("outer_done".into()).into())
     }
@@ -122,58 +225,47 @@ impl NodeTrait for Node3 {
             Err(anyhow::anyhow!("Expected string in exec_res for Node3"))
         }
     }
+
+    async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.prep(shared_store)
+    }
+
+    async fn exec_async(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.exec(prep_res)
+    }
+
+    async fn post_async(
+        &self,
+        shared_store: &dyn SharedStore,
+        prep_res: &PrepResult,
+        exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        self.post(shared_store, prep_res, exec_res)
+    }
 }
 
 #[test]
 fn test_flow_nested() {
-    let n2_arc = Arc::new(Node2);
+    let n2_arc = Arc::new(Node2 {
+        base: BaseNode::new(),
+    });
     let n1_arc = Arc::new(Node1 {
-        next_node: Some(n2_arc),
+        base: BaseNode::new(),
     });
 
     // Inner flow definition
-    let inner_flow = Flow::new(Some(n1_arc));
+    let mut inner_flow = Flow::new(Some(n1_arc));
+    inner_flow.add_transition("next".into(), n2_arc.clone()); // This was the old way
     // No add_transition for inner_flow, Node1 handles its successor.
 
-    let n3_arc = Arc::new(Node3);
-
-    // To make the outer flow transition from inner_flow to Node3 on "done",
-    // the `inner_flow` (when treated as a NodeTrait) needs to handle get_successor("done").
-    // This requires `Flow` to implement `add_successor` and `get_successor` meaningfully.
-    // For now, `Flow`'s default `get_successor` returns `None`.
-    // This test will need `Flow` to be enhanced or the test structure rethought.
-
-    // Let's create a wrapper node for the inner flow that handles the "done" transition.
-    struct FlowWrapperNode {
-        flow_to_run: Arc<Flow>,
-        done_successor: Option<Arc<dyn NodeTrait>>,
-    }
-
-    #[async_trait]
-    impl NodeTrait for FlowWrapperNode {
-        fn run(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
-            self.flow_to_run.run(shared_store)
-        }
-        async fn run_async(&self, shared_store: &dyn SharedStore) -> Result<PostResult> {
-            self.flow_to_run.run_async(shared_store).await
-        }
-        fn get_successor(&self, action: &str) -> Option<Arc<dyn NodeTrait>> {
-            if action == "done" {
-                self.done_successor.clone()
-            } else {
-                None
-            }
-        }
-        // Implement other NodeTrait methods with defaults or by delegation if needed
-    }
-
-    let inner_flow_arc = Arc::new(inner_flow);
-    let wrapped_inner_flow = Arc::new(FlowWrapperNode {
-        flow_to_run: inner_flow_arc,
-        done_successor: Some(n3_arc),
+    let n3_arc = Arc::new(Node3 {
+        base: BaseNode::new(),
     });
 
-    let outer = Flow::new(Some(wrapped_inner_flow));
+    let inner_flow_arc = Arc::new(inner_flow);
+
+    let mut outer = Flow::new(Some(inner_flow_arc));
+    outer.add_transition("done".into(), n3_arc.clone()); // This was the old way
     // outer.add_transition("done", n3_arc.clone()); // This was the old way
 
     let shared = BaseSharedStore::new_in_memory();

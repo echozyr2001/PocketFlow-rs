@@ -1,10 +1,13 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use pocketflow_rs::core::{
-    ExecResult, PostResult, PrepResult,
-    communication::{BaseSharedStore, SharedStore},
-    flow::Flow,
-    node::NodeTrait,
+use pocketflow_rs::{
+    core::{
+        ExecResult, PostResult, PrepResult,
+        communication::{BaseSharedStore, SharedStore},
+        flow::Flow,
+        node::NodeTrait,
+    },
+    node::BaseNode,
 };
 use serde_json::{Value as JsonValue, json};
 use std::{
@@ -13,10 +16,30 @@ use std::{
 };
 use utils::{StreamLlmOptions, call_llm_streaming, convert_json_to_chat_messages};
 
-struct StreamingChatNode;
+#[derive(Clone)]
+struct StreamingChatNode {
+    base: BaseNode,
+}
 
 #[async_trait]
 impl NodeTrait for StreamingChatNode {
+    fn prep(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
+        self.base.prep(shared_store)
+    }
+
+    fn exec(&self, prep_res: &PrepResult) -> Result<ExecResult> {
+        self.base.exec(prep_res)
+    }
+
+    fn post(
+        &self,
+        _shared_store: &dyn SharedStore,
+        _prep_res: &PrepResult,
+        _exec_res: &ExecResult,
+    ) -> Result<PostResult> {
+        Ok(PostResult::default())
+    }
+
     async fn prep_async(&self, shared_store: &dyn SharedStore) -> Result<PrepResult> {
         if !shared_store.contains_key("messages") {
             // Initialize the messages array with a system message
@@ -137,19 +160,23 @@ impl NodeTrait for StreamingChatNode {
         Ok(PostResult::from("continue"))
     }
 
-    fn get_successor(&self, action: &str) -> Option<Arc<dyn NodeTrait>> {
-        if action == "continue" {
-            Some(Arc::new(StreamingChatNode {}))
-        } else {
-            None
-        }
-    }
+    // fn add_successor(&mut self, action: String, node: Arc<dyn NodeTrait>) {
+    //     self.base.add_successor(action, node)
+    // }
+
+    // fn get_successor(&self, action: &str) -> Option<Arc<dyn NodeTrait>> {
+    //     self.base.get_successor(action)
+    // }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let chat_node_arc = Arc::new(StreamingChatNode {});
-    let flow = Flow::new(Some(chat_node_arc));
+    let chat_node = StreamingChatNode {
+        base: BaseNode::new(),
+    };
+
+    let mut flow = Flow::new(Some(Arc::new(chat_node.clone())));
+    flow.add_transition("continue".into(), Arc::new(chat_node));
 
     let shared = BaseSharedStore::new_in_memory();
     flow.run_async(&shared).await?; // Use run_async for async execution
