@@ -154,6 +154,21 @@ impl SharedStore for BaseSharedStore {
     }
 }
 
+// 为工具模块添加的便利方法
+impl BaseSharedStore {
+    /// 获取所有注册的节点ID（用于可视化等工具功能）
+    /// 这是一个简化实现，在实际使用中应该由流程管理器维护节点列表
+    pub fn get_all_nodes(&self) -> Vec<crate::core::NodeId> {
+        // 简化实现：假设所有以 "node_" 开头的 key 都是节点
+        // 实际实现中应该有专门的节点注册机制
+        self.keys()
+            .into_iter()
+            .filter(|key| key.starts_with("node_"))
+            .map(|key| crate::core::NodeId::from(key.strip_prefix("node_").unwrap_or(&key)))
+            .collect()
+    }
+}
+
 // --- Params and ParamsBuilder ---
 // (Content remains the same)
 
