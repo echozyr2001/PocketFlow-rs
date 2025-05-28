@@ -34,6 +34,14 @@ impl From<Value> for PrepResult {
 }
 
 impl PrepResult {
+    pub fn new(value: Value) -> Self {
+        PrepResult(value)
+    }
+    
+    pub fn get_value(&self, key: &str) -> Option<&Value> {
+        self.0.as_object().and_then(|obj| obj.get(key))
+    }
+    
     pub fn as_str(&self) -> Option<&str> {
         self.0.as_str()
     }
@@ -75,6 +83,10 @@ impl From<&str> for PostResult {
 }
 
 impl PostResult {
+    pub fn new(value: &str) -> Self {
+        PostResult(value.to_string())
+    }
+    
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -95,6 +107,14 @@ impl From<Value> for ExecResult {
 }
 
 impl ExecResult {
+    pub fn new(value: Value) -> Self {
+        ExecResult(value)
+    }
+    
+    pub fn get_value(&self, key: &str) -> Option<&Value> {
+        self.0.as_object().and_then(|obj| obj.get(key))
+    }
+    
     pub fn as_str(&self) -> Option<&str> {
         self.0.as_str()
     }
