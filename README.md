@@ -347,6 +347,18 @@ cargo run --example api_request
 
 Demonstrates integration with OpenAI API and error handling.
 
+### 7. Redis Storage
+
+```bash
+# First, start Redis (requires Docker or local Redis installation)
+docker run --rm -p 6379:6379 redis:latest
+
+# Then run the Redis example 
+cargo run --example redis_storage --features redis
+```
+
+Shows how to use Redis as a persistent storage backend for distributed workflows.
+
 ### Real-World Patterns
 
 #### RAG (Retrieval-Augmented Generation)

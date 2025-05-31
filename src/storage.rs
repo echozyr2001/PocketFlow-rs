@@ -1,8 +1,14 @@
 mod memory;
 mod file;
 
+#[cfg(feature = "redis")]
+mod redis;
+
 pub use memory::{InMemoryStorage, InMemoryError};
 pub use file::{FileStorage, FileStorageError};
+
+#[cfg(feature = "redis")]
+pub use redis::{RedisStorage, RedisStorageError};
 use serde_json::Value;
 use std::error::Error;
 

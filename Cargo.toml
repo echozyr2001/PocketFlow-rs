@@ -19,8 +19,19 @@ chrono = { version = "0.4", features = ["serde"] }
 async-openai = "0.20"
 reqwest = { version = "0.11", features = ["json"] }
 
+redis = { version = "0.31", optional = true }
+
 [dev-dependencies]
 tempfile = "3.0"
+
+[features]
+default = []
+redis = ["dep:redis"]
+
+[[example]]
+name = "redis_storage"
+path = "examples/redis_storage.rs"
+required-features = ["redis"]
 
 [[example]]
 name = "basic_usage"
