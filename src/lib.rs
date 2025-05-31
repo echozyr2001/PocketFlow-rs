@@ -79,13 +79,6 @@ pub mod shared_store;
 pub mod storage;
 
 // ============================================================================
-// OPTIONAL MODULES (feature-gated)
-// ============================================================================
-
-/// Async shared store support
-pub mod async_shared_store;
-
-// ============================================================================
 // CORE RE-EXPORTS
 // ============================================================================
 
@@ -93,7 +86,7 @@ pub mod async_shared_store;
 pub use action::{Action, ActionBuilder, ActionCondition, ComparisonOperator};
 
 // SharedStore - always available
-pub use shared_store::{InMemorySharedStore, SharedStore};
+pub use shared_store::{AsyncSharedStore, InMemorySharedStore, SharedStore};
 
 // Storage traits - always available
 pub use storage::StorageBackend;
@@ -143,13 +136,6 @@ pub use node::builtin::{ApiConfig, ApiRequestNode, MockLlmNode};
 pub use flow::FlowNode;
 
 // ============================================================================
-// ASYNC RE-EXPORTS (feature-gated)
-// ============================================================================
-
-/// Async shared store
-pub use async_shared_store::AsyncSharedStore;
-
-// ============================================================================
 // CONVENIENCE RE-EXPORTS
 // ============================================================================
 
@@ -179,7 +165,7 @@ pub mod prelude {
     pub use crate::storage::DatabaseStorage;
 
     // Async support - always available
-    pub use crate::async_shared_store::AsyncSharedStore;
+    pub use crate::shared_store::AsyncSharedStore;
 
     // Builtin nodes - feature-gated
     #[cfg(feature = "builtin-nodes")]
