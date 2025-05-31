@@ -1,14 +1,14 @@
 #[cfg(feature = "storage-database")]
 use crate::storage::AsyncStorageBackend;
 use sea_orm::{
-    Database, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
-    ActiveValue::Set, ColumnTrait, ActiveModelTrait, PaginatorTrait,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Database, DatabaseConnection, DbErr,
+    EntityTrait, PaginatorTrait, QueryFilter,
 };
 use sea_orm_migration::MigratorTrait;
 use serde_json::Value;
 
-pub mod migration;
 pub mod entities;
+pub mod migration;
 
 use entities::key_value_store::{ActiveModel, Column, Entity as KeyValueStore};
 pub use migration::Migrator;
@@ -24,7 +24,7 @@ impl DatabaseStorage {
     pub async fn new(database_url: &str) -> Result<Self, DbErr> {
         Self::new_with_prefix(database_url, "pocketflow").await
     }
-    
+
     /// Create a new database storage with custom prefix
     pub async fn new_with_prefix(database_url: &str, prefix: &str) -> Result<Self, DbErr> {
         let connection = Database::connect(database_url).await?;
@@ -70,7 +70,7 @@ impl AsyncStorageBackend for DatabaseStorage {
         let full_key = self.full_key(&key);
         let value_str = serde_json::to_string(&value)
             .map_err(|e| DbErr::Custom(format!("Failed to serialize value: {}", e)))?;
-        
+
         // Try to find existing record
         if let Some(existing) = KeyValueStore::find_by_id(&full_key)
             .one(&self.connection)
@@ -92,17 +92,17 @@ impl AsyncStorageBackend for DatabaseStorage {
             };
             new_model.insert(&self.connection).await?;
         }
-        
+
         Ok(())
     }
 
     async fn get(&self, key: &str) -> Result<Option<Value>, Self::Error> {
         let full_key = self.full_key(key);
-        
+
         let result = KeyValueStore::find_by_id(&full_key)
             .one(&self.connection)
             .await?;
-        
+
         if let Some(model) = result {
             let value = serde_json::from_str(&model.value)
                 .map_err(|e| DbErr::Custom(format!("Failed to deserialize value: {}", e)))?;
@@ -114,63 +114,63 @@ impl AsyncStorageBackend for DatabaseStorage {
 
     async fn remove(&mut self, key: &str) -> Result<Option<Value>, Self::Error> {
         let full_key = self.full_key(key);
-        
+
         // Get the value before deletion
         let existing_value = self.get(key).await?;
-        
+
         // Delete the record
         KeyValueStore::delete_by_id(&full_key)
             .exec(&self.connection)
             .await?;
-        
+
         Ok(existing_value)
     }
 
     async fn contains_key(&self, key: &str) -> Result<bool, Self::Error> {
         let full_key = self.full_key(key);
-        
+
         let count = KeyValueStore::find_by_id(&full_key)
             .count(&self.connection)
             .await?;
-        
+
         Ok(count > 0)
     }
 
     async fn keys(&self) -> Result<Vec<String>, Self::Error> {
         let prefix_filter = format!("{}:", self.prefix);
-        
+
         let records = KeyValueStore::find()
             .filter(Column::Key.starts_with(&prefix_filter))
             .all(&self.connection)
             .await?;
-        
+
         let keys = records
             .into_iter()
             .filter_map(|model| self.strip_prefix(&model.key).map(String::from))
             .collect();
-        
+
         Ok(keys)
     }
 
     async fn clear(&mut self) -> Result<(), Self::Error> {
         let prefix_filter = format!("{}:", self.prefix);
-        
+
         KeyValueStore::delete_many()
             .filter(Column::Key.starts_with(&prefix_filter))
             .exec(&self.connection)
             .await?;
-        
+
         Ok(())
     }
 
     async fn len(&self) -> Result<usize, Self::Error> {
         let prefix_filter = format!("{}:", self.prefix);
-        
+
         let count = KeyValueStore::find()
             .filter(Column::Key.starts_with(&prefix_filter))
             .count(&self.connection)
             .await? as usize;
-        
+
         Ok(count)
     }
 

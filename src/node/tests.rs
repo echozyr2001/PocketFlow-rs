@@ -283,57 +283,56 @@ async fn test_execution_context() {
     assert_eq!(context.current_retry, 3);
     assert!(!context.can_retry());
 }
-    #[cfg(feature = "builtin-llm")]
-    #[tokio::test]
-    async fn test_api_request_node_creation() {
-        let config = ApiConfig {
-            api_key: "test_key".to_string(),
-            model: "gpt-3.5-turbo".to_string(),
-            max_tokens: Some(100),
-            temperature: Some(0.7),
-            base_url: None,
-            org_id: None,
-            timeout: Some(30),
-        };
 
-        let api_node = ApiRequestNode::new(
-            config,
-            "prompt",
-            "response", 
-            Action::simple("next"),
-        ).with_retries(5);
+#[cfg(feature = "builtin-llm")]
+#[tokio::test]
+async fn test_api_request_node_creation() {
+    let config = ApiConfig {
+        api_key: "test_key".to_string(),
+        model: "gpt-3.5-turbo".to_string(),
+        max_tokens: Some(100),
+        temperature: Some(0.7),
+        base_url: None,
+        org_id: None,
+        timeout: Some(30),
+        top_p: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+    };
 
-        // Test basic properties directly on the ApiRequestNode using trait bounds
-        use crate::InMemoryStorage;
-        use crate::node::NodeBackend;
-        
-        let name = <ApiRequestNode as NodeBackend<InMemoryStorage>>::name(&api_node);
-        let retries = <ApiRequestNode as NodeBackend<InMemoryStorage>>::max_retries(&api_node);
-        let delay = <ApiRequestNode as NodeBackend<InMemoryStorage>>::retry_delay(&api_node);
-        
-        assert_eq!(name, "ApiRequestNode");
-        assert_eq!(retries, 5);
-        assert_eq!(delay, Duration::from_millis(1000));
-    }
+    let api_node = ApiRequestNode::new("prompt", "response", Action::simple("next"))
+        .with_config(config)
+        .with_retries(5);
 
-    #[cfg(feature = "builtin-llm")]
-    #[tokio::test] 
-    async fn test_api_request_node_prep_error() {
-        let config = ApiConfig::default();
-        let mut api_node = ApiRequestNode::new(
-            config,
-            "nonexistent_key",
-            "response",
-            Action::simple("next"),
-        );
+    // Test basic properties directly on the ApiRequestNode using trait bounds
+    use crate::InMemoryStorage;
+    use crate::node::NodeBackend;
 
-        let store = SharedStore::new();
-        let context = ExecutionContext::new(3, Duration::from_millis(1000));
+    let name = <ApiRequestNode as NodeBackend<InMemoryStorage>>::name(&api_node);
+    let retries = <ApiRequestNode as NodeBackend<InMemoryStorage>>::max_retries(&api_node);
+    let delay = <ApiRequestNode as NodeBackend<InMemoryStorage>>::retry_delay(&api_node);
 
-        use crate::InMemoryStorage;
-        use crate::node::NodeBackend;
-        
-        let result = <ApiRequestNode as NodeBackend<InMemoryStorage>>::prep(&mut api_node, &store, &context).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not found"));
-    }
+    assert_eq!(name, "ApiRequestNode");
+    assert_eq!(retries, 5);
+    assert_eq!(delay, Duration::from_millis(1000));
+}
+
+#[cfg(feature = "builtin-llm")]
+#[tokio::test]
+async fn test_api_request_node_prep_error() {
+    let config = ApiConfig::default();
+    let mut api_node = ApiRequestNode::new("nonexistent_key", "response", Action::simple("next"))
+        .with_config(config);
+
+    let store = SharedStore::new();
+    let context = ExecutionContext::new(3, Duration::from_millis(1000));
+
+    use crate::InMemoryStorage;
+    use crate::node::NodeBackend;
+
+    let result =
+        <ApiRequestNode as NodeBackend<InMemoryStorage>>::prep(&mut api_node, &store, &context)
+            .await;
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("not found"));
+}

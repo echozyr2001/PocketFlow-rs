@@ -17,7 +17,7 @@ tokio = { version = "1.0", features = ["full"] }
 uuid = { version = "1.0", features = ["v4"] }
 
 # Built-in LLM support
-async-openai = { version = "0.20", optional = true }
+async-openai = { version = "0.28", optional = true }
 reqwest = { version = "0.11", features = ["json"], optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }
 rand = { version = "0.8", optional = true }
@@ -26,7 +26,7 @@ rand = { version = "0.8", optional = true }
 redis = { version = "0.31", optional = true }
 sea-orm = { version = "1.1.0", features = [
   "sqlx-sqlite",
-  "sqlx-postgres", 
+  "sqlx-postgres",
   "sqlx-mysql",
   "runtime-tokio-rustls",
   "macros",
@@ -77,7 +77,13 @@ storage-postgres = ["storage-database"]
 storage-mysql = ["storage-database"]
 
 # 所有存储后端
-storage-all = ["storage-file", "storage-redis", "storage-sqlite", "storage-postgres", "storage-mysql"]
+storage-all = [
+  "storage-file",
+  "storage-redis",
+  "storage-sqlite",
+  "storage-postgres",
+  "storage-mysql",
+]
 
 # === 便利功能 ===
 # 完整功能集

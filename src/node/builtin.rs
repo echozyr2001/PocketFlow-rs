@@ -423,7 +423,13 @@ pub mod basic {
 pub mod llm {
     use crate::node::{ExecutionContext, NodeBackend, NodeError};
     use crate::{Action, SharedStore, StorageBackend};
+    use async_openai::{
+        Client,
+        config::OpenAIConfig,
+        types::{ChatCompletionRequestMessage, CreateChatCompletionRequestArgs},
+    };
     use async_trait::async_trait;
+    use serde_json::Value;
     use std::time::Duration;
 
     /// Configuration for API requests
@@ -443,19 +449,92 @@ pub mod llm {
         pub temperature: Option<f32>,
         /// Request timeout in seconds
         pub timeout: Option<u64>,
+        /// Top-p sampling parameter
+        pub top_p: Option<f32>,
+        /// Frequency penalty
+        pub frequency_penalty: Option<f32>,
+        /// Presence penalty
+        pub presence_penalty: Option<f32>,
     }
 
     impl Default for ApiConfig {
         fn default() -> Self {
             Self {
-                api_key: String::new(),
+                api_key: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
                 base_url: None,
                 org_id: None,
                 model: "gpt-3.5-turbo".to_string(),
                 max_tokens: Some(1000),
                 temperature: Some(0.7),
                 timeout: Some(30),
+                top_p: None,
+                frequency_penalty: None,
+                presence_penalty: None,
             }
+        }
+    }
+
+    impl ApiConfig {
+        /// Create a new ApiConfig with an API key
+        pub fn new(api_key: impl Into<String>) -> Self {
+            Self {
+                api_key: api_key.into(),
+                ..Default::default()
+            }
+        }
+
+        /// Set the model to use
+        pub fn with_model(mut self, model: impl Into<String>) -> Self {
+            self.model = model.into();
+            self
+        }
+
+        /// Set the base URL for the API
+        pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+            self.base_url = Some(base_url.into());
+            self
+        }
+
+        /// Set the organization ID
+        pub fn with_org_id(mut self, org_id: impl Into<String>) -> Self {
+            self.org_id = Some(org_id.into());
+            self
+        }
+
+        /// Set maximum tokens for response
+        pub fn with_max_tokens(mut self, max_tokens: u16) -> Self {
+            self.max_tokens = Some(max_tokens);
+            self
+        }
+
+        /// Set temperature for response generation
+        pub fn with_temperature(mut self, temperature: f32) -> Self {
+            self.temperature = Some(temperature);
+            self
+        }
+
+        /// Set request timeout in seconds
+        pub fn with_timeout(mut self, timeout: u64) -> Self {
+            self.timeout = Some(timeout);
+            self
+        }
+
+        /// Set top-p sampling parameter
+        pub fn with_top_p(mut self, top_p: f32) -> Self {
+            self.top_p = Some(top_p);
+            self
+        }
+
+        /// Set frequency penalty
+        pub fn with_frequency_penalty(mut self, frequency_penalty: f32) -> Self {
+            self.frequency_penalty = Some(frequency_penalty);
+            self
+        }
+
+        /// Set presence penalty
+        pub fn with_presence_penalty(mut self, presence_penalty: f32) -> Self {
+            self.presence_penalty = Some(presence_penalty);
+            self
         }
     }
 
@@ -601,16 +680,16 @@ pub mod llm {
         }
     }
 
-    /// HTTP-based API request node for LLM interactions
+    /// HTTP-based API request node for LLM interactions using async-openai SDK
     ///
     /// This node makes actual HTTP requests to LLM APIs (OpenAI, etc.)
     /// It supports various configuration options including retries,
-    /// custom endpoints, and error handling.
+    /// custom endpoints, message history, and error handling.
     #[derive(Debug, Clone)]
     pub struct ApiRequestNode {
         /// Configuration for the API
         config: ApiConfig,
-        /// Input key for the prompt
+        /// Input key for the messages (can be a single prompt or array of messages)
         input_key: String,
         /// Output key for the response
         output_key: String,
@@ -620,24 +699,31 @@ pub mod llm {
         max_retries: usize,
         /// Delay between retries
         retry_delay: Duration,
+        /// System message to prepend to conversations
+        system_message: Option<String>,
+        /// Cached OpenAI client
+        client: Option<Client<OpenAIConfig>>,
     }
 
     impl ApiRequestNode {
-        /// Create a new API request node
-        pub fn new<S: Into<String>>(
-            config: ApiConfig,
-            input_key: S,
-            output_key: S,
-            action: Action,
-        ) -> Self {
+        /// Create a new API request node with default configuration
+        pub fn new<S: Into<String>>(input_key: S, output_key: S, action: Action) -> Self {
             Self {
-                config,
+                config: ApiConfig::default(),
                 input_key: input_key.into(),
                 output_key: output_key.into(),
                 action,
                 max_retries: 3,
                 retry_delay: Duration::from_millis(1000),
+                system_message: None,
+                client: None,
             }
+        }
+
+        /// Create a new API request node with custom configuration
+        pub fn with_config(mut self, config: ApiConfig) -> Self {
+            self.config = config;
+            self
         }
 
         /// Set maximum retries
@@ -652,64 +738,227 @@ pub mod llm {
             self
         }
 
-        /// Make the actual HTTP request to the LLM API
-        async fn make_api_request(&self, prompt: &str) -> Result<String, NodeError> {
-            let client = reqwest::Client::new();
-            
-            // Use OpenAI API format by default
-            let url = self.config.base_url.as_deref()
-                .unwrap_or("https://api.openai.com/v1/chat/completions");
+        /// Set a system message to prepend to conversations
+        pub fn with_system_message(mut self, message: impl Into<String>) -> Self {
+            self.system_message = Some(message.into());
+            self
+        }
 
-            let request_body = serde_json::json!({
-                "model": self.config.model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "max_tokens": self.config.max_tokens,
-                "temperature": self.config.temperature
-            });
+        /// Update the configuration
+        pub fn update_config(mut self, config: ApiConfig) -> Self {
+            self.config = config;
+            self.client = None; // Reset client to force recreation
+            self
+        }
 
-            let response = client
-                .post(url)
-                .header("Authorization", format!("Bearer {}", self.config.api_key))
-                .header("Content-Type", "application/json")
-                .json(&request_body)
-                .send()
-                .await
-                .map_err(|e| NodeError::ExecutionError(format!("API request failed: {}", e)))?;
+        /// Get or create an OpenAI client
+        fn get_client(&mut self) -> Result<&Client<OpenAIConfig>, NodeError> {
+            if self.client.is_none() {
+                let mut config_builder = OpenAIConfig::new().with_api_key(&self.config.api_key);
 
-            if !response.status().is_success() {
-                let status = response.status();
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                return Err(NodeError::ExecutionError(format!(
-                    "API returned error {}: {}", status, error_text
-                )));
+                if let Some(ref base_url) = self.config.base_url {
+                    config_builder = config_builder.with_api_base(base_url);
+                }
+
+                if let Some(ref org_id) = self.config.org_id {
+                    config_builder = config_builder.with_org_id(org_id);
+                }
+
+                self.client = Some(Client::with_config(config_builder));
             }
 
-            let response_json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| NodeError::ExecutionError(format!("Failed to parse response: {}", e)))?;
+            Ok(self.client.as_ref().unwrap())
+        }
 
-            // Extract the assistant's response from OpenAI format
-            let content = response_json
-                .get("choices")
-                .and_then(|choices| choices.get(0))
-                .and_then(|choice| choice.get("message"))
-                .and_then(|message| message.get("content"))
-                .and_then(|content| content.as_str())
-                .ok_or_else(|| NodeError::ExecutionError("Invalid API response format".to_string()))?;
+        /// Convert input to messages array
+        fn parse_messages(
+            &self,
+            input: &Value,
+        ) -> Result<Vec<ChatCompletionRequestMessage>, NodeError> {
+            let mut messages = Vec::new();
 
-            Ok(content.to_string())
+            // Add system message if provided
+            if let Some(ref system_msg) = self.system_message {
+                messages.push(ChatCompletionRequestMessage::System(
+                    async_openai::types::ChatCompletionRequestSystemMessage {
+                        content: system_msg.clone().into(),
+                        name: None,
+                    },
+                ));
+            }
+
+            // Parse input as either a single prompt or array of messages
+            match input {
+                Value::String(prompt) => {
+                    // Single prompt string - create user message
+                    messages.push(ChatCompletionRequestMessage::User(
+                        async_openai::types::ChatCompletionRequestUserMessage {
+                            content: prompt.clone().into(),
+                            name: None,
+                        },
+                    ));
+                }
+                Value::Array(message_array) => {
+                    // Array of message objects
+                    for msg_value in message_array {
+                        let role =
+                            msg_value
+                                .get("role")
+                                .and_then(|r| r.as_str())
+                                .ok_or_else(|| {
+                                    NodeError::ValidationError(
+                                        "Message must have a 'role' field".to_string(),
+                                    )
+                                })?;
+
+                        let content = msg_value
+                            .get("content")
+                            .and_then(|c| c.as_str())
+                            .ok_or_else(|| {
+                                NodeError::ValidationError(
+                                    "Message must have a 'content' field".to_string(),
+                                )
+                            })?
+                            .to_string();
+
+                        match role {
+                            "system" => {
+                                messages.push(ChatCompletionRequestMessage::System(
+                                    async_openai::types::ChatCompletionRequestSystemMessage {
+                                        content: content.into(),
+                                        name: msg_value
+                                            .get("name")
+                                            .and_then(|n| n.as_str())
+                                            .map(|s| s.to_string()),
+                                    },
+                                ));
+                            }
+                            "user" => {
+                                messages.push(ChatCompletionRequestMessage::User(
+                                    async_openai::types::ChatCompletionRequestUserMessage {
+                                        content: content.into(),
+                                        name: msg_value
+                                            .get("name")
+                                            .and_then(|n| n.as_str())
+                                            .map(|s| s.to_string()),
+                                    },
+                                ));
+                            }
+                            "assistant" => {
+                                messages.push(ChatCompletionRequestMessage::Assistant(
+                                    async_openai::types::ChatCompletionRequestAssistantMessage {
+                                        content: Some(content.into()),
+                                        name: msg_value
+                                            .get("name")
+                                            .and_then(|n| n.as_str())
+                                            .map(|s| s.to_string()),
+                                        ..Default::default()
+                                    },
+                                ));
+                            }
+                            _ => {
+                                return Err(NodeError::ValidationError(format!(
+                                    "Unsupported message role: {}",
+                                    role
+                                )));
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    return Err(NodeError::ValidationError(
+                        "Input must be a string (prompt) or array of message objects".to_string(),
+                    ));
+                }
+            }
+
+            if messages.is_empty() {
+                return Err(NodeError::ValidationError(
+                    "No valid messages found in input".to_string(),
+                ));
+            }
+
+            Ok(messages)
+        }
+
+        /// Make the actual API request using async-openai SDK
+        async fn make_api_request(
+            &mut self,
+            messages: Vec<ChatCompletionRequestMessage>,
+        ) -> Result<String, NodeError> {
+            // Extract config values to avoid borrowing issues
+            let model = self.config.model.clone();
+            let max_tokens = self.config.max_tokens;
+            let temperature = self.config.temperature;
+            let top_p = self.config.top_p;
+            let frequency_penalty = self.config.frequency_penalty;
+            let presence_penalty = self.config.presence_penalty;
+            let timeout_secs = self.config.timeout;
+
+            let client = self.get_client()?;
+
+            // Build the request using builder pattern correctly
+            let mut request_builder = CreateChatCompletionRequestArgs::default();
+            request_builder.model(model);
+            request_builder.messages(messages);
+
+            if let Some(max_tokens) = max_tokens {
+                request_builder.max_tokens(max_tokens);
+            }
+
+            if let Some(temperature) = temperature {
+                request_builder.temperature(temperature);
+            }
+
+            if let Some(top_p) = top_p {
+                request_builder.top_p(top_p);
+            }
+
+            if let Some(frequency_penalty) = frequency_penalty {
+                request_builder.frequency_penalty(frequency_penalty);
+            }
+
+            if let Some(presence_penalty) = presence_penalty {
+                request_builder.presence_penalty(presence_penalty);
+            }
+
+            let request = request_builder.build().map_err(|e| {
+                NodeError::ExecutionError(format!("Failed to build request: {}", e))
+            })?;
+
+            // Make the request with timeout
+            let response =
+                if let Some(timeout_secs) = timeout_secs {
+                    tokio::time::timeout(
+                        Duration::from_secs(timeout_secs),
+                        client.chat().create(request),
+                    )
+                    .await
+                    .map_err(|_| NodeError::ExecutionError("Request timeout".to_string()))?
+                    .map_err(|e| NodeError::ExecutionError(format!("API request failed: {}", e)))?
+                } else {
+                    client.chat().create(request).await.map_err(|e| {
+                        NodeError::ExecutionError(format!("API request failed: {}", e))
+                    })?
+                };
+
+            // Extract the response content
+            let content = response
+                .choices
+                .first()
+                .and_then(|choice| choice.message.content.as_ref())
+                .ok_or_else(|| {
+                    NodeError::ExecutionError("No response content received".to_string())
+                })?
+                .clone();
+
+            Ok(content)
         }
     }
 
     #[async_trait]
     impl<S: StorageBackend + Send + Sync> NodeBackend<S> for ApiRequestNode {
-        type PrepResult = String; // The prompt to send
+        type PrepResult = Vec<ChatCompletionRequestMessage>; // The messages to send
         type ExecResult = String; // The API response
         type Error = NodeError;
 
@@ -719,15 +968,10 @@ pub mod llm {
             _context: &ExecutionContext,
         ) -> Result<Self::PrepResult, Self::Error> {
             match store.get(&self.input_key) {
-                Ok(Some(value)) => {
-                    value.as_str()
-                        .ok_or_else(|| NodeError::PrepError(format!(
-                            "Input '{}' is not a string", self.input_key
-                        )))
-                        .map(|s| s.to_string())
-                }
+                Ok(Some(value)) => self.parse_messages(&value),
                 Ok(None) => Err(NodeError::PrepError(format!(
-                    "Input key '{}' not found in store", self.input_key
+                    "Input key '{}' not found in store",
+                    self.input_key
                 ))),
                 Err(e) => Err(NodeError::StorageError(e.to_string())),
             }
@@ -741,13 +985,14 @@ pub mod llm {
             // Check if this is a retry and log it
             if context.current_retry > 0 {
                 eprintln!(
-                    "ApiRequestNode retry attempt {} for prompt: '{}'",
-                    context.current_retry, prep_result
+                    "ApiRequestNode retry attempt {} for {} messages",
+                    context.current_retry,
+                    prep_result.len()
                 );
             }
 
             // Make the actual API request
-            self.make_api_request(&prep_result).await
+            self.make_api_request(prep_result).await
         }
 
         async fn post(
@@ -773,7 +1018,10 @@ pub mod llm {
             _context: &ExecutionContext,
         ) -> Result<Self::ExecResult, Self::Error> {
             // For API failures, return a user-friendly error message
-            Ok(format!("API request failed: {}. Please check your configuration and try again.", error))
+            Ok(format!(
+                "API request failed: {}. Please check your configuration and try again.",
+                error
+            ))
         }
 
         fn name(&self) -> &str {
