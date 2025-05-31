@@ -1,4 +1,7 @@
+#[cfg(feature = "builtin-llm")]
+use pocketflow_rs::MockLlmNode;
 use pocketflow_rs::prelude::*;
+// Note: RouteCondition is part of the Flow system and should be available
 use serde_json::json;
 use std::time::Duration;
 
@@ -9,19 +12,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Simple Linear Flow
     println!("1. Simple Linear Flow:");
     simple_linear_flow().await?;
-    
+
     println!("\n{}\n", "=".repeat(50));
-    
+
     // Example 2: Conditional Flow
     println!("2. Conditional Flow:");
     conditional_flow().await?;
-    
+
     println!("\n{}\n", "=".repeat(50));
-    
+
     // Example 3: Complex Workflow
     println!("3. Complex Workflow:");
     complex_workflow().await?;
-    
+
     Ok(())
 }
 
@@ -31,10 +34,13 @@ async fn simple_linear_flow() -> Result<(), Box<dyn std::error::Error>> {
     let process_node = Node::new(SetValueNode::new(
         "status".to_string(),
         json!("processing"),
-        Action::simple("validate")
+        Action::simple("validate"),
     ));
-    let end_node = Node::new(LogNode::new("Workflow completed!", Action::simple("complete")));
-    
+    let end_node = Node::new(LogNode::new(
+        "Workflow completed!",
+        Action::simple("complete"),
+    ));
+
     // Build flow using the builder pattern
     let mut flow = FlowBuilder::new()
         .start_node("start")
@@ -45,15 +51,15 @@ async fn simple_linear_flow() -> Result<(), Box<dyn std::error::Error>> {
         .route("start", "init", "process")
         .route("process", "validate", "end")
         .build();
-    
+
     // Execute the flow
     let mut store = SharedStore::new();
     let result = flow.execute(&mut store).await?;
-    
+
     println!("  Execution completed in {} steps", result.steps_executed);
     println!("  Execution path: {:?}", result.execution_path);
     println!("  Final status: {:?}", store.get("status")?);
-    
+
     Ok(())
 }
 
@@ -62,22 +68,22 @@ async fn conditional_flow() -> Result<(), Box<dyn std::error::Error>> {
     let setup_node = Node::new(SetValueNode::new(
         "user_authenticated".to_string(),
         json!(true), // Try changing this to false
-        Action::simple("check_auth")
+        Action::simple("check_auth"),
     ));
-    
+
     // Create success and failure paths
     let success_node = Node::new(SetValueNode::new(
         "result".to_string(),
         json!("Access granted"),
-        Action::simple("complete")
+        Action::simple("complete"),
     ));
-    
+
     let failure_node = Node::new(SetValueNode::new(
         "result".to_string(),
         json!("Access denied"),
-        Action::simple("complete")
+        Action::simple("complete"),
     ));
-    
+
     // Build conditional flow
     let mut flow = FlowBuilder::new()
         .start_node("setup")
@@ -85,56 +91,59 @@ async fn conditional_flow() -> Result<(), Box<dyn std::error::Error>> {
         .node("success", success_node)
         .node("failure", failure_node)
         .conditional_route(
-            "setup", 
-            "check_auth", 
-            "success", 
-            RouteCondition::KeyEquals("user_authenticated".to_string(), json!(true))
+            "setup",
+            "check_auth",
+            "success",
+            RouteCondition::KeyEquals("user_authenticated".to_string(), json!(true)),
         )
         .conditional_route(
-            "setup", 
-            "check_auth", 
-            "failure", 
-            RouteCondition::KeyEquals("user_authenticated".to_string(), json!(false))
+            "setup",
+            "check_auth",
+            "failure",
+            RouteCondition::KeyEquals("user_authenticated".to_string(), json!(false)),
         )
         .build();
-    
+
     let mut store = SharedStore::new();
     let result = flow.execute(&mut store).await?;
-    
+
     println!("  Authentication result: {:?}", store.get("result")?);
     println!("  Execution path: {:?}", result.execution_path);
-    
+
     Ok(())
 }
 
 async fn complex_workflow() -> Result<(), Box<dyn std::error::Error>> {
     // Create a complex workflow with multiple paths and retries
-    
+
     // Input validation node
     let input_node = Node::new(SetValueNode::new(
         "input_data".to_string(),
         json!({"user_id": 123, "action": "process"}),
-        Action::simple("validate")
+        Action::simple("validate"),
     ));
-    
+
     // Validation node with conditional routing
     let validation_node = Node::new(FunctionNode::new(
         "ValidationNode".to_string(),
         // Prep: read input data
         |store: &SharedStore<_>, _context: &ExecutionContext| -> serde_json::Value {
-            store.get("input_data")
-                .ok()
-                .flatten()
-                .unwrap_or(json!({}))
+            store.get("input_data").ok().flatten().unwrap_or(json!({}))
         },
         // Exec: validate the data
-        |data: serde_json::Value, _context: &ExecutionContext| -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-            let is_valid = data.get("user_id").and_then(|v| v.as_i64()).is_some() &&
-                          data.get("action").and_then(|v| v.as_str()).is_some();
+        |data: serde_json::Value,
+         _context: &ExecutionContext|
+         -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+            let is_valid = data.get("user_id").and_then(|v| v.as_i64()).is_some()
+                && data.get("action").and_then(|v| v.as_str()).is_some();
             Ok(is_valid)
         },
         // Post: set validation result and route
-        |store: &mut SharedStore<_>, _prep: serde_json::Value, is_valid: bool, _context: &ExecutionContext| -> Result<Action, Box<dyn std::error::Error + Send + Sync>> {
+        |store: &mut SharedStore<_>,
+         _prep: serde_json::Value,
+         is_valid: bool,
+         _context: &ExecutionContext|
+         -> Result<Action, Box<dyn std::error::Error + Send + Sync>> {
             store.set("validation_passed".to_string(), json!(is_valid))?;
             if is_valid {
                 // Set a prompt for the LLM node
@@ -143,35 +152,68 @@ async fn complex_workflow() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 Ok(Action::simple("error"))
             }
-        }
+        },
     ));
-    
+
     // Processing node with simulated LLM call
-    let processing_node = Node::new(MockLlmNode::new(
-        "prompt".to_string(), // Use a different key for the prompt
-        "llm_response".to_string(),
-        "AI processed the data successfully".to_string(),
-        Action::simple("finalize")
-    ).with_failure_rate(0.2).with_retries(3));
-    
+    #[cfg(feature = "builtin-llm")]
+    let processing_node = Node::new(
+        MockLlmNode::new(
+            "prompt".to_string(), // Use a different key for the prompt
+            "llm_response".to_string(),
+            "AI processed the data successfully".to_string(),
+            Action::simple("finalize"),
+        )
+        .with_failure_rate(0.2)
+        .with_retries(3),
+    );
+
+    #[cfg(not(feature = "builtin-llm"))]
+    let processing_node = Node::new(FunctionNode::new(
+        "MockProcessingNode".to_string(),
+        |_store: &SharedStore<_>, _context: &ExecutionContext| -> () {
+            // Simple mock processing
+        },
+        |_prep: (),
+         _context: &ExecutionContext|
+         -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+            Ok("Mock processed the data successfully".to_string())
+        },
+        |store: &mut SharedStore<_>,
+         _prep: (),
+         exec_result: String,
+         _context: &ExecutionContext|
+         -> Result<Action, Box<dyn std::error::Error + Send + Sync>> {
+            store.set(
+                "llm_response".to_string(),
+                serde_json::Value::String(exec_result),
+            )?;
+            Ok(Action::simple("finalize"))
+        },
+    ));
+
     // Error handling node
     let error_node = Node::new(SetValueNode::new(
         "error_message".to_string(),
         json!("Validation failed"),
-        Action::simple("complete")
+        Action::simple("complete"),
     ));
-    
+
     // Final result node
     let finalize_node = Node::new(FunctionNode::new(
         "FinalizeNode".to_string(),
         // Prep: gather all results
-        |store: &SharedStore<_>, _context: &ExecutionContext| -> (Option<serde_json::Value>, Option<serde_json::Value>) {
+        |store: &SharedStore<_>,
+         _context: &ExecutionContext|
+         -> (Option<serde_json::Value>, Option<serde_json::Value>) {
             let input = store.get("input_data").ok().flatten();
             let response = store.get("llm_response").ok().flatten();
             (input, response)
         },
         // Exec: create final result
-        |data: (Option<serde_json::Value>, Option<serde_json::Value>), _context: &ExecutionContext| -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        |data: (Option<serde_json::Value>, Option<serde_json::Value>),
+         _context: &ExecutionContext|
+         -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
             let result = json!({
                 "status": "success",
                 "input": data.0,
@@ -181,18 +223,22 @@ async fn complex_workflow() -> Result<(), Box<dyn std::error::Error>> {
             Ok(result)
         },
         // Post: store final result
-        |store: &mut SharedStore<_>, _prep: (Option<serde_json::Value>, Option<serde_json::Value>), result: serde_json::Value, _context: &ExecutionContext| -> Result<Action, Box<dyn std::error::Error + Send + Sync>> {
+        |store: &mut SharedStore<_>,
+         _prep: (Option<serde_json::Value>, Option<serde_json::Value>),
+         result: serde_json::Value,
+         _context: &ExecutionContext|
+         -> Result<Action, Box<dyn std::error::Error + Send + Sync>> {
             store.set("final_result".to_string(), result)?;
             Ok(Action::simple("complete"))
-        }
+        },
     ));
-    
+
     // Add a delay node for demonstration
     let delay_node = Node::new(DelayNode::new(
         Duration::from_millis(100),
-        Action::simple("continue")
+        Action::simple("continue"),
     ));
-    
+
     // Build the complex flow
     let mut flow = FlowBuilder::new()
         .start_node("input")
@@ -205,38 +251,41 @@ async fn complex_workflow() -> Result<(), Box<dyn std::error::Error>> {
         .node("finalize", finalize_node)
         .route("input", "validate", "validate")
         .conditional_route(
-            "validate", 
-            "process", 
-            "delay", 
-            RouteCondition::KeyEquals("validation_passed".to_string(), json!(true))
+            "validate",
+            "process",
+            "delay",
+            RouteCondition::KeyEquals("validation_passed".to_string(), json!(true)),
         )
         .conditional_route(
-            "validate", 
-            "error", 
-            "error", 
-            RouteCondition::KeyEquals("validation_passed".to_string(), json!(false))
+            "validate",
+            "error",
+            "error",
+            RouteCondition::KeyEquals("validation_passed".to_string(), json!(false)),
         )
         .route("delay", "continue", "process")
         .route("process", "finalize", "finalize")
         .build();
-    
+
     // Validate the flow before execution
     flow.validate()?;
-    
+
     let mut store = SharedStore::new();
     let result = flow.execute(&mut store).await?;
-    
+
     println!("  Complex workflow completed!");
     println!("  Steps executed: {}", result.steps_executed);
     println!("  Execution path: {:?}", result.execution_path);
-    
+
     if let Some(final_result) = store.get("final_result")? {
-        println!("  Final result: {}", serde_json::to_string_pretty(&final_result)?);
+        println!(
+            "  Final result: {}",
+            serde_json::to_string_pretty(&final_result)?
+        );
     }
-    
+
     if let Some(error_msg) = store.get("error_message")? {
         println!("  Error: {:?}", error_msg);
     }
-    
+
     Ok(())
 }

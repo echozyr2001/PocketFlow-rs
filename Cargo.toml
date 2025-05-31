@@ -8,23 +8,25 @@ license = "MIT"
 keywords = ["llm", "ai", "framework", "workflow"]
 
 [dependencies]
+# Core dependencies - always available
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+thiserror = "1.0"
 async-trait = "0.1"
 tokio = { version = "1.0", features = ["full"] }
 uuid = { version = "1.0", features = ["v4"] }
-rand = "0.8"
-thiserror = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
-async-openai = "0.20"
-reqwest = { version = "0.11", features = ["json"] }
 
+# Built-in LLM support
+async-openai = { version = "0.20", optional = true }
+reqwest = { version = "0.11", features = ["json"], optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+rand = { version = "0.8", optional = true }
+
+# Storage backends
 redis = { version = "0.31", optional = true }
-
-# Optional database support with SeaORM
 sea-orm = { version = "1.1.0", features = [
   "sqlx-sqlite",
-  "sqlx-postgres",
+  "sqlx-postgres", 
   "sqlx-mysql",
   "runtime-tokio-rustls",
   "macros",
@@ -33,35 +35,76 @@ sea-orm-migration = { version = "1.1.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3.0"
+tokio-test = "0.4"
 
 [features]
-default = []
-redis = ["dep:redis"]
-database = ["dep:sea-orm", "dep:sea-orm-migration"]
-database-sqlite = ["database"]
-database-postgres = ["database"]
-database-mysql = ["database"]
-async = []
+# 默认包含核心功能和基本组件
+default = ["builtin-nodes", "storage-memory"]
+
+# === 内置组件 ===
+# 基础内置节点（LogNode、SetValueNode、GetValueNode、ConditionalNode、DelayNode）
+builtin-nodes = ["dep:chrono"]
+
+# LLM相关节点（MockLlmNode、ApiRequestNode）
+builtin-llm = ["builtin-nodes", "dep:async-openai", "dep:reqwest", "dep:rand"]
+
+# 高级流程组件（FlowNode等）
+builtin-flows = []
+
+# 所有内置组件
+builtin = ["builtin-nodes", "builtin-llm", "builtin-flows"]
+
+# === 存储后端 ===
+# 内存存储（默认）
+storage-memory = []
+
+# 文件存储
+storage-file = []
+
+# Redis存储
+storage-redis = ["dep:redis"]
+
+# 数据库存储基础（包含SeaORM）
+storage-database = ["dep:sea-orm", "dep:sea-orm-migration"]
+
+# SQLite支持
+storage-sqlite = ["storage-database"]
+
+# PostgreSQL支持  
+storage-postgres = ["storage-database"]
+
+# MySQL支持
+storage-mysql = ["storage-database"]
+
+# 所有存储后端
+storage-all = ["storage-file", "storage-redis", "storage-sqlite", "storage-postgres", "storage-mysql"]
+
+# === 便利功能 ===
+# 完整功能集
+full = ["default", "builtin", "storage-all"]
+
+# 开发推荐配置
+dev = ["full"]
 
 [[example]]
 name = "database_storage"
 path = "examples/database_storage.rs"
-required-features = ["database"]
+required-features = ["storage-database"]
 
 [[example]]
 name = "postgres_storage"
 path = "examples/postgres_storage.rs"
-required-features = ["database-postgres"]
+required-features = ["storage-postgres"]
 
 [[example]]
 name = "mysql_storage"
 path = "examples/mysql_storage.rs"
-required-features = ["database-mysql"]
+required-features = ["storage-mysql"]
 
 [[example]]
 name = "redis_storage"
 path = "examples/redis_storage.rs"
-required-features = ["redis"]
+required-features = ["storage-redis"]
 
 [[example]]
 name = "basic_usage"
@@ -74,15 +117,19 @@ path = "examples/enhanced_actions.rs"
 [[example]]
 name = "node_system"
 path = "examples/node_system.rs"
+required-features = ["builtin-nodes"]
 
 [[example]]
 name = "flow_system"
 path = "examples/flow_system.rs"
+required-features = ["builtin-nodes"]
 
 [[example]]
 name = "nested_flows"
 path = "examples/nested_flows.rs"
+required-features = ["builtin-flows"]
 
 [[example]]
 name = "api_request"
 path = "examples/api_request.rs"
+required-features = ["builtin-llm"]

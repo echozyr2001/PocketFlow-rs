@@ -9,29 +9,26 @@ use std::fmt;
 pub enum Action {
     /// Simple string-based action (backward compatible)
     Simple(String),
-    
+
     /// Action with parameters
     Parameterized {
         name: String,
         params: HashMap<String, Value>,
     },
-    
+
     /// Conditional action that evaluates based on context
     Conditional {
         condition: ActionCondition,
         if_true: Box<Action>,
         if_false: Box<Action>,
     },
-    
+
     /// Multiple actions that can be taken (for parallel execution or choices)
     Multiple(Vec<Action>),
-    
+
     /// Action with priority (higher numbers = higher priority)
-    Prioritized {
-        action: Box<Action>,
-        priority: i32,
-    },
-    
+    Prioritized { action: Box<Action>, priority: i32 },
+
     /// Action with metadata
     WithMetadata {
         action: Box<Action>,
@@ -44,32 +41,32 @@ pub enum Action {
 pub enum ActionCondition {
     /// Always true
     Always,
-    
+
     /// Always false
     Never,
-    
+
     /// Check if a key exists in the shared store
     KeyExists(String),
-    
+
     /// Check if a key has a specific value
     KeyEquals(String, Value),
-    
+
     /// Compare a numeric value
     NumericCompare {
         key: String,
         operator: ComparisonOperator,
         value: f64,
     },
-    
+
     /// Custom condition with a string expression
     Expression(String),
-    
+
     /// Logical AND of multiple conditions
     And(Vec<ActionCondition>),
-    
+
     /// Logical OR of multiple conditions
     Or(Vec<ActionCondition>),
-    
+
     /// Logical NOT of a condition
     Not(Box<ActionCondition>),
 }
@@ -90,7 +87,7 @@ impl Action {
     pub fn simple<S: Into<String>>(name: S) -> Self {
         Action::Simple(name.into())
     }
-    
+
     /// Create a parameterized action
     pub fn with_params<S: Into<String>>(name: S, params: HashMap<String, Value>) -> Self {
         Action::Parameterized {
@@ -98,7 +95,7 @@ impl Action {
             params,
         }
     }
-    
+
     /// Create a conditional action
     pub fn conditional(condition: ActionCondition, if_true: Action, if_false: Action) -> Self {
         Action::Conditional {
@@ -107,12 +104,12 @@ impl Action {
             if_false: Box::new(if_false),
         }
     }
-    
+
     /// Create a multiple action
     pub fn multiple(actions: Vec<Action>) -> Self {
         Action::Multiple(actions)
     }
-    
+
     /// Create a prioritized action
     pub fn with_priority(action: Action, priority: i32) -> Self {
         Action::Prioritized {
@@ -120,7 +117,7 @@ impl Action {
             priority,
         }
     }
-    
+
     /// Add metadata to an action
     pub fn with_metadata(action: Action, metadata: HashMap<String, Value>) -> Self {
         Action::WithMetadata {
@@ -128,7 +125,7 @@ impl Action {
             metadata,
         }
     }
-    
+
     /// Get the primary name/identifier of the action
     pub fn name(&self) -> String {
         match self {
@@ -146,7 +143,7 @@ impl Action {
             Action::WithMetadata { action, .. } => action.name(),
         }
     }
-    
+
     /// Get parameters if this is a parameterized action
     pub fn params(&self) -> Option<&HashMap<String, Value>> {
         match self {
@@ -156,7 +153,7 @@ impl Action {
             _ => None,
         }
     }
-    
+
     /// Get priority if this action has one
     pub fn priority(&self) -> Option<i32> {
         match self {
@@ -165,7 +162,7 @@ impl Action {
             _ => None,
         }
     }
-    
+
     /// Get metadata if this action has any
     pub fn metadata(&self) -> Option<&HashMap<String, Value>> {
         match self {
@@ -173,22 +170,22 @@ impl Action {
             _ => None,
         }
     }
-    
+
     /// Check if this is a simple action
     pub fn is_simple(&self) -> bool {
         matches!(self, Action::Simple(_))
     }
-    
+
     /// Check if this action has parameters
     pub fn has_params(&self) -> bool {
         self.params().is_some()
     }
-    
+
     /// Check if this action is conditional
     pub fn is_conditional(&self) -> bool {
         matches!(self, Action::Conditional { .. })
     }
-    
+
     /// Check if this action represents multiple actions
     pub fn is_multiple(&self) -> bool {
         matches!(self, Action::Multiple(_))
@@ -200,36 +197,40 @@ impl ActionCondition {
     pub fn key_exists<S: Into<String>>(key: S) -> Self {
         ActionCondition::KeyExists(key.into())
     }
-    
+
     /// Create a condition that checks if a key equals a value
     pub fn key_equals<S: Into<String>>(key: S, value: Value) -> Self {
         ActionCondition::KeyEquals(key.into(), value)
     }
-    
+
     /// Create a numeric comparison condition
-    pub fn numeric_compare<S: Into<String>>(key: S, operator: ComparisonOperator, value: f64) -> Self {
+    pub fn numeric_compare<S: Into<String>>(
+        key: S,
+        operator: ComparisonOperator,
+        value: f64,
+    ) -> Self {
         ActionCondition::NumericCompare {
             key: key.into(),
             operator,
             value,
         }
     }
-    
+
     /// Create an expression-based condition
     pub fn expression<S: Into<String>>(expr: S) -> Self {
         ActionCondition::Expression(expr.into())
     }
-    
+
     /// Create an AND condition
     pub fn and(conditions: Vec<ActionCondition>) -> Self {
         ActionCondition::And(conditions)
     }
-    
+
     /// Create an OR condition
     pub fn or(conditions: Vec<ActionCondition>) -> Self {
         ActionCondition::Or(conditions)
     }
-    
+
     /// Create a NOT condition
     pub fn not(condition: ActionCondition) -> Self {
         ActionCondition::Not(Box::new(condition))
@@ -242,19 +243,30 @@ impl fmt::Display for Action {
         match self {
             Action::Simple(name) => write!(f, "{}", name),
             Action::Parameterized { name, params } => {
-                write!(f, "{}({})", name, 
-                    params.iter()
+                write!(
+                    f,
+                    "{}({})",
+                    name,
+                    params
+                        .iter()
                         .map(|(k, v)| format!("{}={}", k, v))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
             }
-            Action::Conditional { condition, if_true, if_false } => {
+            Action::Conditional {
+                condition,
+                if_true,
+                if_false,
+            } => {
                 write!(f, "if {} then {} else {}", condition, if_true, if_false)
             }
             Action::Multiple(actions) => {
-                write!(f, "[{}]", 
-                    actions.iter()
+                write!(
+                    f,
+                    "[{}]",
+                    actions
+                        .iter()
                         .map(|a| a.to_string())
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -277,7 +289,11 @@ impl fmt::Display for ActionCondition {
             ActionCondition::Never => write!(f, "false"),
             ActionCondition::KeyExists(key) => write!(f, "exists({})", key),
             ActionCondition::KeyEquals(key, value) => write!(f, "{} == {}", key, value),
-            ActionCondition::NumericCompare { key, operator, value } => {
+            ActionCondition::NumericCompare {
+                key,
+                operator,
+                value,
+            } => {
                 let op_str = match operator {
                     ComparisonOperator::Equal => "==",
                     ComparisonOperator::NotEqual => "!=",
@@ -290,16 +306,22 @@ impl fmt::Display for ActionCondition {
             }
             ActionCondition::Expression(expr) => write!(f, "({})", expr),
             ActionCondition::And(conditions) => {
-                write!(f, "({})", 
-                    conditions.iter()
+                write!(
+                    f,
+                    "({})",
+                    conditions
+                        .iter()
                         .map(|c| c.to_string())
                         .collect::<Vec<_>>()
                         .join(" && ")
                 )
             }
             ActionCondition::Or(conditions) => {
-                write!(f, "({})", 
-                    conditions.iter()
+                write!(
+                    f,
+                    "({})",
+                    conditions
+                        .iter()
                         .map(|c| c.to_string())
                         .collect::<Vec<_>>()
                         .join(" || ")
@@ -341,7 +363,7 @@ impl ActionBuilder {
             action: Action::Simple(name.into()),
         }
     }
-    
+
     /// Add parameters to the action
     pub fn with_params(mut self, params: HashMap<String, Value>) -> Self {
         match self.action {
@@ -358,14 +380,14 @@ impl ActionBuilder {
         }
         self
     }
-    
+
     /// Add a single parameter
     pub fn with_param<S: Into<String>>(self, key: S, value: Value) -> Self {
         let mut params = HashMap::new();
         params.insert(key.into(), value);
         self.with_params(params)
     }
-    
+
     /// Set priority
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.action = Action::Prioritized {
@@ -374,7 +396,7 @@ impl ActionBuilder {
         };
         self
     }
-    
+
     /// Add metadata
     pub fn with_metadata(mut self, metadata: HashMap<String, Value>) -> Self {
         self.action = Action::WithMetadata {
@@ -383,7 +405,7 @@ impl ActionBuilder {
         };
         self
     }
-    
+
     /// Build the final action
     pub fn build(self) -> Action {
         self.action
@@ -402,7 +424,7 @@ mod tests {
         assert!(!action.has_params());
         assert!(!action.is_conditional());
         assert!(!action.is_multiple());
-        
+
         // Test display
         assert_eq!(action.to_string(), "continue");
     }
@@ -412,13 +434,13 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("temperature".to_string(), json!(0.7));
         params.insert("max_tokens".to_string(), json!(100));
-        
+
         let action = Action::with_params("llm_call", params.clone());
         assert_eq!(action.name(), "llm_call");
         assert!(!action.is_simple());
         assert!(action.has_params());
         assert_eq!(action.params(), Some(&params));
-        
+
         // Test display
         let display_str = action.to_string();
         assert!(display_str.contains("llm_call"));
@@ -431,11 +453,11 @@ mod tests {
         let condition = ActionCondition::key_exists("user_input");
         let if_true = Action::simple("process");
         let if_false = Action::simple("request_input");
-        
+
         let action = Action::conditional(condition.clone(), if_true.clone(), if_false.clone());
         assert_eq!(action.name(), "process"); // Should return if_true action name
         assert!(action.is_conditional());
-        
+
         // Test display
         let display_str = action.to_string();
         assert!(display_str.contains("if"));
@@ -451,11 +473,11 @@ mod tests {
             Action::simple("action2"),
             Action::simple("action3"),
         ];
-        
+
         let multi_action = Action::multiple(actions);
         assert_eq!(multi_action.name(), "action1"); // Should return first action name
         assert!(multi_action.is_multiple());
-        
+
         // Test display
         let display_str = multi_action.to_string();
         assert!(display_str.contains("["));
@@ -468,10 +490,10 @@ mod tests {
     fn test_prioritized_action() {
         let base_action = Action::simple("important");
         let action = Action::with_priority(base_action, 10);
-        
+
         assert_eq!(action.name(), "important");
         assert_eq!(action.priority(), Some(10));
-        
+
         // Test display
         assert_eq!(action.to_string(), "important@10");
     }
@@ -481,10 +503,10 @@ mod tests {
         let mut metadata = HashMap::new();
         metadata.insert("source".to_string(), json!("user"));
         metadata.insert("timestamp".to_string(), json!("2024-01-01"));
-        
+
         let base_action = Action::simple("process");
         let action = Action::with_metadata(base_action, metadata.clone());
-        
+
         assert_eq!(action.name(), "process");
         assert_eq!(action.metadata(), Some(&metadata));
     }
@@ -494,22 +516,23 @@ mod tests {
         // Test key exists condition
         let cond1 = ActionCondition::key_exists("test_key");
         assert_eq!(cond1.to_string(), "exists(test_key)");
-        
+
         // Test key equals condition
         let cond2 = ActionCondition::key_equals("status", json!("ready"));
         assert_eq!(cond2.to_string(), "status == \"ready\"");
-        
+
         // Test numeric comparison
-        let cond3 = ActionCondition::numeric_compare("temperature", ComparisonOperator::GreaterThan, 0.5);
+        let cond3 =
+            ActionCondition::numeric_compare("temperature", ComparisonOperator::GreaterThan, 0.5);
         assert_eq!(cond3.to_string(), "temperature > 0.5");
-        
+
         // Test logical operations
         let cond4 = ActionCondition::and(vec![cond1.clone(), cond2.clone()]);
         assert!(cond4.to_string().contains("&&"));
-        
+
         let cond5 = ActionCondition::or(vec![cond1.clone(), cond2.clone()]);
         assert!(cond5.to_string().contains("||"));
-        
+
         let cond6 = ActionCondition::not(cond1);
         assert!(cond6.to_string().contains("!"));
     }
@@ -518,16 +541,16 @@ mod tests {
     fn test_action_builder() {
         let mut params = HashMap::new();
         params.insert("model".to_string(), json!("gpt-4"));
-        
+
         let mut metadata = HashMap::new();
         metadata.insert("created_by".to_string(), json!("system"));
-        
+
         let action = ActionBuilder::new("complex_action")
             .with_params(params.clone())
             .with_priority(5)
             .with_metadata(metadata.clone())
             .build();
-        
+
         assert_eq!(action.name(), "complex_action");
         assert_eq!(action.priority(), Some(5));
         assert_eq!(action.metadata(), Some(&metadata));
@@ -539,7 +562,7 @@ mod tests {
         let action = ActionBuilder::new("test")
             .with_param("key", json!("value"))
             .build();
-        
+
         assert!(action.has_params());
         assert_eq!(action.name(), "test");
     }
@@ -550,10 +573,10 @@ mod tests {
         let action1: Action = "continue".into();
         assert_eq!(action1.name(), "continue");
         assert!(action1.is_simple());
-        
+
         let action2: Action = "retry".to_string().into();
         assert_eq!(action2.name(), "retry");
-        
+
         // Test conversion to string
         let action3 = Action::simple("finish");
         let name: String = action3.into();
@@ -566,12 +589,12 @@ mod tests {
         let json_str = serde_json::to_string(&action).unwrap();
         let deserialized: Action = serde_json::from_str(&json_str).unwrap();
         assert_eq!(action, deserialized);
-        
+
         // Test complex action serialization
         let mut params = HashMap::new();
         params.insert("temp".to_string(), json!(0.7));
         let complex_action = Action::with_params("llm", params);
-        
+
         let json_str2 = serde_json::to_string(&complex_action).unwrap();
         let deserialized2: Action = serde_json::from_str(&json_str2).unwrap();
         assert_eq!(complex_action, deserialized2);
@@ -582,11 +605,11 @@ mod tests {
         // Test deeply nested action structure
         let base = Action::simple("base");
         let with_priority = Action::with_priority(base, 10);
-        
+
         let mut metadata = HashMap::new();
         metadata.insert("level".to_string(), json!("nested"));
         let with_metadata = Action::with_metadata(with_priority, metadata);
-        
+
         assert_eq!(with_metadata.name(), "base");
         assert_eq!(with_metadata.priority(), Some(10));
         assert!(with_metadata.metadata().is_some());

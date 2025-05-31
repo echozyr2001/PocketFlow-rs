@@ -124,17 +124,17 @@ mod tests {
     fn test_file_storage_basic_operations() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("test_storage.json");
-        
+
         let mut storage = FileStorage::new(&file_path).unwrap();
-        
+
         // Test set and get
         storage.set("key1".to_string(), json!("value1")).unwrap();
         assert_eq!(storage.get("key1").unwrap(), Some(json!("value1")));
-        
+
         // Test persistence by creating a new instance
         let storage2 = FileStorage::new(&file_path).unwrap();
         assert_eq!(storage2.get("key1").unwrap(), Some(json!("value1")));
-        
+
         // Clean up
         fs::remove_file(&file_path).ok();
     }
@@ -143,13 +143,18 @@ mod tests {
     fn test_file_storage_persistence() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("test_persistence.json");
-        
+
         // Create storage and add data
         {
             let mut storage = FileStorage::new(&file_path).unwrap();
-            storage.set("persistent_key".to_string(), json!({"data": "persistent_value"})).unwrap();
+            storage
+                .set(
+                    "persistent_key".to_string(),
+                    json!({"data": "persistent_value"}),
+                )
+                .unwrap();
         }
-        
+
         // Create new storage instance and verify data persisted
         {
             let storage = FileStorage::new(&file_path).unwrap();
@@ -159,7 +164,7 @@ mod tests {
             );
             assert_eq!(storage.len().unwrap(), 1);
         }
-        
+
         // Clean up
         fs::remove_file(&file_path).ok();
     }

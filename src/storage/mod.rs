@@ -1,22 +1,18 @@
-mod memory;
-mod file;
+//! Storage backends for PocketFlow SharedStore
+//!
+//! This module provides various storage backend implementations:
+//!
+//! - Memory storage (always available)
+//! - File storage (feature: `storage-file`)
+//! - Redis storage (feature: `storage-redis`)
+//! - Database storage (feature: `storage-database`)
 
-#[cfg(feature = "redis")]
-mod redis;
-
-#[cfg(feature = "database")]
-mod database;
-
-pub use memory::{InMemoryStorage, InMemoryError};
-pub use file::{FileStorage, FileStorageError};
-
-#[cfg(feature = "redis")]
-pub use redis::{RedisStorage, RedisStorageError};
-
-#[cfg(feature = "database")]
-pub use database::DatabaseStorage;
 use serde_json::Value;
 use std::error::Error;
+
+// ============================================================================
+// STORAGE TRAITS
+// ============================================================================
 
 /// Trait defining the interface for storage backends used by SharedStore
 pub trait StorageBackend: Send + Sync {
@@ -51,7 +47,6 @@ pub trait StorageBackend: Send + Sync {
 }
 
 /// Async version of StorageBackend for I/O-bound operations
-#[cfg(any(feature = "async", feature = "database"))]
 #[async_trait::async_trait]
 pub trait AsyncStorageBackend: Send + Sync {
     /// Error type returned by storage operations
@@ -83,3 +78,29 @@ pub trait AsyncStorageBackend: Send + Sync {
         Ok(self.len().await? == 0)
     }
 }
+
+// ============================================================================
+// STORAGE IMPLEMENTATIONS (feature-gated)
+// ============================================================================
+
+// Memory storage - always available
+mod memory;
+pub use memory::{InMemoryStorage, InMemoryStorageError};
+
+// File storage
+#[cfg(feature = "storage-file")]
+mod file;
+#[cfg(feature = "storage-file")]
+pub use file::{FileStorage, FileStorageError};
+
+// Redis storage
+#[cfg(feature = "storage-redis")]
+mod redis;
+#[cfg(feature = "storage-redis")]
+pub use redis::{RedisStorage, RedisStorageError};
+
+// Database storage
+#[cfg(feature = "storage-database")]
+mod database;
+#[cfg(feature = "storage-database")]
+pub use database::DatabaseStorage;

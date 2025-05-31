@@ -1,4 +1,4 @@
-#[cfg(feature = "database")]
+#[cfg(feature = "storage-database")]
 use crate::storage::AsyncStorageBackend;
 use sea_orm::{
     Database, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
@@ -61,7 +61,7 @@ impl DatabaseStorage {
     }
 }
 
-#[cfg(feature = "database")]
+#[cfg(feature = "storage-database")]
 #[async_trait::async_trait]
 impl AsyncStorageBackend for DatabaseStorage {
     type Error = DbErr;

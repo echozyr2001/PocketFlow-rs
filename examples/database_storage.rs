@@ -5,45 +5,55 @@ use std::env;
 #[tokio::main]
 async fn main() -> Result<(), sea_orm::DbErr> {
     println!("🚀 PocketFlow-RS Multi-Database Support Example");
-    
+
     // Example 1: SQLite Database (always available)
     println!("\n📝 Example 1: SQLite Database");
-    
+
     let sqlite_storage = DatabaseStorage::new("sqlite::memory:").await?;
     sqlite_storage.migrate().await?;
     let sqlite_store = AsyncSharedStore::new(sqlite_storage);
-    
+
     // Test basic operations with SQLite
-    sqlite_store.set("sqlite_test".to_string(), json!({
-        "database": "SQLite",
-        "type": "in-memory",
-        "features": ["lightweight", "serverless", "zero-config"]
-    })).await?;
-    
+    sqlite_store
+        .set(
+            "sqlite_test".to_string(),
+            json!({
+                "database": "SQLite",
+                "type": "in-memory",
+                "features": ["lightweight", "serverless", "zero-config"]
+            }),
+        )
+        .await?;
+
     println!("✅ SQLite: Stored test data");
-    
+
     if let Some(data) = sqlite_store.get("sqlite_test").await? {
         println!("📄 SQLite Data: {}", data["database"]);
     }
-    
+
     // Example 2: PostgreSQL Database (if available)
     println!("\n📝 Example 2: PostgreSQL Database");
-    
+
     // Check if PostgreSQL URL is provided via environment variable
     if let Ok(postgres_url) = env::var("DATABASE_POSTGRES_URL") {
         match DatabaseStorage::new(&postgres_url).await {
             Ok(postgres_storage) => {
                 if let Ok(_) = postgres_storage.migrate().await {
                     let postgres_store = AsyncSharedStore::new(postgres_storage);
-                    
-                    postgres_store.set("postgres_test".to_string(), json!({
-                        "database": "PostgreSQL",
-                        "type": "relational",
-                        "features": ["ACID", "transactions", "JSON support", "scalable"]
-                    })).await?;
-                    
+
+                    postgres_store
+                        .set(
+                            "postgres_test".to_string(),
+                            json!({
+                                "database": "PostgreSQL",
+                                "type": "relational",
+                                "features": ["ACID", "transactions", "JSON support", "scalable"]
+                            }),
+                        )
+                        .await?;
+
                     println!("✅ PostgreSQL: Connected and stored test data");
-                    
+
                     if let Some(data) = postgres_store.get("postgres_test").await? {
                         println!("📄 PostgreSQL Data: {}", data["database"]);
                     }
@@ -57,27 +67,34 @@ async fn main() -> Result<(), sea_orm::DbErr> {
         }
     } else {
         println!("💡 PostgreSQL: Set DATABASE_POSTGRES_URL environment variable to test");
-        println!("   Example: export DATABASE_POSTGRES_URL=\"postgres://user:pass@localhost:5432/pocketflow\"");
+        println!(
+            "   Example: export DATABASE_POSTGRES_URL=\"postgres://user:pass@localhost:5432/pocketflow\""
+        );
     }
-    
+
     // Example 3: MySQL Database (if available)
     println!("\n📝 Example 3: MySQL Database");
-    
+
     // Check if MySQL URL is provided via environment variable
     if let Ok(mysql_url) = env::var("DATABASE_MYSQL_URL") {
         match DatabaseStorage::new(&mysql_url).await {
             Ok(mysql_storage) => {
                 if let Ok(_) = mysql_storage.migrate().await {
                     let mysql_store = AsyncSharedStore::new(mysql_storage);
-                    
-                    mysql_store.set("mysql_test".to_string(), json!({
-                        "database": "MySQL",
-                        "type": "relational",
-                        "features": ["high-performance", "replication", "clustering"]
-                    })).await?;
-                    
+
+                    mysql_store
+                        .set(
+                            "mysql_test".to_string(),
+                            json!({
+                                "database": "MySQL",
+                                "type": "relational",
+                                "features": ["high-performance", "replication", "clustering"]
+                            }),
+                        )
+                        .await?;
+
                     println!("✅ MySQL: Connected and stored test data");
-                    
+
                     if let Some(data) = mysql_store.get("mysql_test").await? {
                         println!("📄 MySQL Data: {}", data["database"]);
                     }
@@ -91,29 +108,36 @@ async fn main() -> Result<(), sea_orm::DbErr> {
         }
     } else {
         println!("💡 MySQL: Set DATABASE_MYSQL_URL environment variable to test");
-        println!("   Example: export DATABASE_MYSQL_URL=\"mysql://user:pass@localhost:3306/pocketflow\"");
+        println!(
+            "   Example: export DATABASE_MYSQL_URL=\"mysql://user:pass@localhost:3306/pocketflow\""
+        );
     }
-    
+
     // Example 4: Database Performance Comparison
     println!("\n📊 Example 4: Performance Comparison");
-    
+
     let start_time = std::time::Instant::now();
-    
+
     // Perform bulk operations on SQLite
     for i in 0..100 {
-        sqlite_store.set(format!("bulk_test_{}", i), json!({
-            "index": i,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-            "data": format!("test_data_{}", i)
-        })).await?;
+        sqlite_store
+            .set(
+                format!("bulk_test_{}", i),
+                json!({
+                    "index": i,
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "data": format!("test_data_{}", i)
+                }),
+            )
+            .await?;
     }
-    
+
     let sqlite_time = start_time.elapsed();
     println!("⚡ SQLite: Inserted 100 records in {:?}", sqlite_time);
-    
+
     // Example 5: Complex Queries and Data Structures
     println!("\n🔍 Example 5: Complex Data Operations");
-    
+
     // Store complex workflow configuration
     let workflow_config = json!({
         "workflow_id": "complex_pipeline",
@@ -173,19 +197,21 @@ async fn main() -> Result<(), sea_orm::DbErr> {
             }
         }
     });
-    
-    sqlite_store.set("complex_workflow".to_string(), workflow_config).await?;
-    
+
+    sqlite_store
+        .set("complex_workflow".to_string(), workflow_config)
+        .await?;
+
     if let Some(config) = sqlite_store.get("complex_workflow").await? {
         println!("✅ Complex workflow stored and retrieved");
         println!("📋 Workflow ID: {}", config["workflow_id"]);
         println!("📋 Version: {}", config["version"]);
         println!("📋 Stages: {}", config["stages"].as_array().unwrap().len());
     }
-    
+
     // Example 6: Database Feature Matrix
     println!("\n📈 Example 6: Database Feature Comparison");
-    
+
     let database_features = json!({
         "SQLite": {
             "pros": [
@@ -231,7 +257,7 @@ async fn main() -> Result<(), sea_orm::DbErr> {
             "pros": [
                 "High performance",
                 "Mature ecosystem",
-                "Wide adoption", 
+                "Wide adoption",
                 "Good replication",
                 "Easy to scale"
             ],
@@ -248,23 +274,25 @@ async fn main() -> Result<(), sea_orm::DbErr> {
             ]
         }
     });
-    
-    sqlite_store.set("database_features".to_string(), database_features).await?;
+
+    sqlite_store
+        .set("database_features".to_string(), database_features)
+        .await?;
     println!("✅ Database feature comparison stored");
-    
+
     // Final statistics
     let total_keys = sqlite_store.keys().await?;
     println!("\n📊 Final Statistics:");
     println!("  - Total keys stored: {}", total_keys.len());
     println!("  - Storage backend: SQLite (in-memory)");
     println!("  - All operations completed successfully");
-    
+
     println!("\n🎉 Multi-database support example completed!");
     println!("💡 PocketFlow-rs supports SQLite, PostgreSQL, and MySQL");
     println!("🔧 Use environment variables to test different databases:");
     println!("   - DATABASE_POSTGRES_URL for PostgreSQL");
     println!("   - DATABASE_MYSQL_URL for MySQL");
-    
+
     Ok(())
 }
 
@@ -273,16 +301,17 @@ async fn main() -> Result<(), sea_orm::DbErr> {
 async fn database_specific_examples() -> Result<(), sea_orm::DbErr> {
     // SQLite with file persistence
     let _sqlite_file = DatabaseStorage::new("sqlite:pocketflow.db").await?;
-    
+
     // PostgreSQL with connection pool
     let _postgres = DatabaseStorage::new(
-        "postgres://user:password@localhost:5432/pocketflow?max_connections=10"
-    ).await?;
-    
+        "postgres://user:password@localhost:5432/pocketflow?max_connections=10",
+    )
+    .await?;
+
     // MySQL with SSL
-    let _mysql = DatabaseStorage::new(
-        "mysql://user:password@localhost:3306/pocketflow?ssl-mode=required"
-    ).await?;
-    
+    let _mysql =
+        DatabaseStorage::new("mysql://user:password@localhost:3306/pocketflow?ssl-mode=required")
+            .await?;
+
     Ok(())
 }

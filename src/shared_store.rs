@@ -1,4 +1,4 @@
-use crate::storage::{StorageBackend, InMemoryStorage};
+use crate::storage::{InMemoryStorage, StorageBackend};
 use serde_json::Value;
 
 /// SharedStore provides a type-safe interface for data communication between nodes
@@ -81,13 +81,22 @@ impl<S: StorageBackend> SharedStore<S> {
     }
 
     /// Convenience method to set a serializable value
-    pub fn set_serializable<T: serde::Serialize>(&mut self, key: String, value: T) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn set_serializable<T: serde::Serialize>(
+        &mut self,
+        key: String,
+        value: T,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let json_value = serde_json::to_value(value)?;
-        self.storage.set(key, json_value).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        self.storage
+            .set(key, json_value)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 
     /// Convenience method to get and deserialize a value
-    pub fn get_deserializable<T: serde::de::DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn get_deserializable<T: serde::de::DeserializeOwned>(
+        &self,
+        key: &str,
+    ) -> Result<Option<T>, Box<dyn std::error::Error + Send + Sync>> {
         match self.storage.get(key) {
             Ok(Some(value)) => {
                 let deserialized = serde_json::from_value(value)?;
@@ -122,8 +131,10 @@ impl Default for InMemorySharedStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "storage-file")]
     use crate::storage::FileStorage;
     use serde_json::json;
+    #[cfg(feature = "storage-file")]
     use tempfile::tempdir;
 
     #[test]
@@ -133,7 +144,7 @@ mod tests {
         let value = json!({"message": "hello"});
 
         store.set(key.clone(), value.clone()).unwrap();
-        
+
         assert_eq!(store.get(&key).unwrap(), Some(value));
     }
 
@@ -156,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_in_memory_shared_store_set_get_serializable() {
-        use serde::{Serialize, Deserialize};
+        use serde::{Deserialize, Serialize};
 
         #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
         struct MyStruct {
@@ -165,10 +176,15 @@ mod tests {
         }
 
         let mut store = InMemorySharedStore::new();
-        let my_data = MyStruct { id: 1, name: "PocketFlow".to_string() };
-        
-        store.set_serializable("my_data".to_string(), my_data.clone()).unwrap();
-        
+        let my_data = MyStruct {
+            id: 1,
+            name: "PocketFlow".to_string(),
+        };
+
+        store
+            .set_serializable("my_data".to_string(), my_data.clone())
+            .unwrap();
+
         let retrieved_my_data: MyStruct = store.get_deserializable("my_data").unwrap().unwrap();
         assert_eq!(retrieved_my_data, my_data);
     }
@@ -176,44 +192,47 @@ mod tests {
     #[test]
     fn test_shared_store_additional_methods() {
         let mut store = InMemorySharedStore::new();
-        
+
         // Test empty store
         assert!(store.is_empty().unwrap());
         assert_eq!(store.len().unwrap(), 0);
         assert!(store.keys().unwrap().is_empty());
-        
+
         // Add some data
         store.set("key1".to_string(), json!("value1")).unwrap();
         store.set("key2".to_string(), json!("value2")).unwrap();
-        
+
         // Test non-empty store
         assert!(!store.is_empty().unwrap());
         assert_eq!(store.len().unwrap(), 2);
         assert!(store.contains_key("key1").unwrap());
         assert!(!store.contains_key("key3").unwrap());
-        
+
         let mut keys = store.keys().unwrap();
         keys.sort();
         assert_eq!(keys, vec!["key1", "key2"]);
-        
+
         // Test clear
         store.clear().unwrap();
         assert!(store.is_empty().unwrap());
         assert_eq!(store.len().unwrap(), 0);
     }
 
+    #[cfg(feature = "storage-file")]
     #[test]
     fn test_file_shared_store() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("test_shared_store.json");
-        
+
         let file_storage = FileStorage::new(&file_path).unwrap();
         let mut store = SharedStore::with_storage(file_storage);
-        
+
         // Test basic operations
-        store.set("file_key".to_string(), json!("file_value")).unwrap();
+        store
+            .set("file_key".to_string(), json!("file_value"))
+            .unwrap();
         assert_eq!(store.get("file_key").unwrap(), Some(json!("file_value")));
-        
+
         // Test persistence by creating a new store with the same file
         let file_storage2 = FileStorage::new(&file_path).unwrap();
         let store2 = SharedStore::with_storage(file_storage2);

@@ -5,24 +5,26 @@ use serde_json::json;
 async fn main() -> Result<(), sea_orm::DbErr> {
     println!("🐬 PocketFlow-RS MySQL Example");
     println!("🔧 This example demonstrates MySQL-specific features");
-    
+
     // Check for MySQL connection string
     let mysql_url = std::env::var("DATABASE_MYSQL_URL")
         .unwrap_or_else(|_| "mysql://root:password@localhost:3306/pocketflow".to_string());
-    
-    println!("📡 Connecting to MySQL: {}", 
-        mysql_url.split('@').last().unwrap_or("localhost"));
-    
+
+    println!(
+        "📡 Connecting to MySQL: {}",
+        mysql_url.split('@').last().unwrap_or("localhost")
+    );
+
     match DatabaseStorage::new(&mysql_url).await {
         Ok(mysql_storage) => {
             println!("✅ Connected to MySQL database");
-            
+
             // Run migrations
             mysql_storage.migrate().await?;
             println!("🔄 Migrations completed");
-            
+
             let store = AsyncSharedStore::new(mysql_storage);
-            
+
             // MySQL features demonstration
             let mysql_features = json!({
                 "storage_engines": ["InnoDB", "MyISAM", "Memory", "Archive"],
@@ -42,10 +44,12 @@ async fn main() -> Result<(), sea_orm::DbErr> {
                 },
                 "high_availability": ["MySQL Router", "ProxySQL", "HAProxy"]
             });
-            
-            store.set("mysql_features".to_string(), mysql_features).await?;
+
+            store
+                .set("mysql_features".to_string(), mysql_features)
+                .await?;
             println!("✅ Stored MySQL feature set");
-            
+
             // Web application optimization demo
             let webapp_optimization = json!({
                 "read_replicas": {
@@ -69,10 +73,12 @@ async fn main() -> Result<(), sea_orm::DbErr> {
                     "covering_indexes": "performance_optimization"
                 }
             });
-            
-            store.set("mysql_webapp_optimization".to_string(), webapp_optimization).await?;
+
+            store
+                .set("mysql_webapp_optimization".to_string(), webapp_optimization)
+                .await?;
             println!("✅ Demonstrated MySQL web application optimizations");
-            
+
             // E-commerce specific features
             let ecommerce_features = json!({
                 "transactions": {
@@ -91,31 +97,42 @@ async fn main() -> Result<(), sea_orm::DbErr> {
                     "read_scaling": "read_replicas"
                 }
             });
-            
-            store.set("mysql_ecommerce".to_string(), ecommerce_features).await?;
+
+            store
+                .set("mysql_ecommerce".to_string(), ecommerce_features)
+                .await?;
             println!("✅ Stored e-commerce specific MySQL features");
-            
+
             // Performance test with bulk data
             let start_time = std::time::Instant::now();
             for i in 0..100 {
-                store.set(format!("mysql_perf_{}", i), json!({
-                    "order_id": i,
-                    "customer_id": i % 10,
-                    "product_ids": [i * 2, i * 2 + 1],
-                    "total_amount": (i as f64) * 29.99,
-                    "timestamp": chrono::Utc::now(),
-                    "status": if i % 3 == 0 { "completed" } else { "processing" }
-                })).await?;
+                store
+                    .set(
+                        format!("mysql_perf_{}", i),
+                        json!({
+                            "order_id": i,
+                            "customer_id": i % 10,
+                            "product_ids": [i * 2, i * 2 + 1],
+                            "total_amount": (i as f64) * 29.99,
+                            "timestamp": chrono::Utc::now(),
+                            "status": if i % 3 == 0 { "completed" } else { "processing" }
+                        }),
+                    )
+                    .await?;
             }
             let duration = start_time.elapsed();
             println!("⚡ MySQL: 100 e-commerce records in {:?}", duration);
-            
+
             // Query performance demonstration
             let query_start = std::time::Instant::now();
             let all_keys = store.keys().await?;
             let query_duration = query_start.elapsed();
-            println!("🔍 MySQL: Listed {} keys in {:?}", all_keys.len(), query_duration);
-            
+            println!(
+                "🔍 MySQL: Listed {} keys in {:?}",
+                all_keys.len(),
+                query_duration
+            );
+
             // Retrieve and display features
             if let Some(features) = store.get("mysql_features").await? {
                 println!("🔍 MySQL Features Retrieved:");
@@ -125,23 +142,25 @@ async fn main() -> Result<(), sea_orm::DbErr> {
                 println!("  - JSON Support: {}", features["json_support"]);
                 println!("  - Clustering: {}", features["clustering"]);
             }
-            
+
             // Connection info
             println!("📊 MySQL Connection Statistics:");
             println!("  - Total records: {}", store.len().await?);
             println!("  - Storage engine: InnoDB (default)");
             println!("  - Character set: utf8mb4 (recommended)");
-            
+
             println!("🎉 MySQL example completed successfully!");
         }
         Err(e) => {
             println!("❌ Failed to connect to MySQL: {}", e);
             println!("💡 Make sure MySQL is running and accessible");
             println!("🔧 Set DATABASE_MYSQL_URL environment variable:");
-            println!("   export DATABASE_MYSQL_URL=\"mysql://user:password@localhost:3306/database\"");
+            println!(
+                "   export DATABASE_MYSQL_URL=\"mysql://user:password@localhost:3306/database\""
+            );
             return Err(e);
         }
     }
-    
+
     Ok(())
 }

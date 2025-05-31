@@ -1,4 +1,3 @@
-#[cfg(any(feature = "async", feature = "database"))]
 use crate::storage::AsyncStorageBackend;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -68,21 +67,34 @@ impl<S: AsyncStorageBackend> AsyncSharedStore<S> {
     }
 
     /// Store a serializable value (convenience method)
-    pub async fn set_serializable<T>(&self, key: String, value: &T) -> Result<(), Box<dyn Error + Send + Sync>>
+    pub async fn set_serializable<T>(
+        &self,
+        key: String,
+        value: &T,
+    ) -> Result<(), Box<dyn Error + Send + Sync>>
     where
         T: Serialize,
     {
         let json_value = serde_json::to_value(value)?;
-        self.set(key, json_value).await.map_err(|e| -> Box<dyn Error + Send + Sync> { Box::new(e) })?;
+        self.set(key, json_value)
+            .await
+            .map_err(|e| -> Box<dyn Error + Send + Sync> { Box::new(e) })?;
         Ok(())
     }
 
     /// Retrieve and deserialize a value (convenience method)
-    pub async fn get_deserializable<T>(&self, key: &str) -> Result<Option<T>, Box<dyn Error + Send + Sync>>
+    pub async fn get_deserializable<T>(
+        &self,
+        key: &str,
+    ) -> Result<Option<T>, Box<dyn Error + Send + Sync>>
     where
         T: for<'de> Deserialize<'de>,
     {
-        if let Some(value) = self.get(key).await.map_err(|e| -> Box<dyn Error + Send + Sync> { Box::new(e) })? {
+        if let Some(value) = self
+            .get(key)
+            .await
+            .map_err(|e| -> Box<dyn Error + Send + Sync> { Box::new(e) })?
+        {
             let deserialized: T = serde_json::from_value(value)?;
             Ok(Some(deserialized))
         } else {
@@ -112,15 +124,18 @@ impl<S: AsyncStorageBackend> Clone for AsyncSharedStore<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{InMemoryStorage, InMemoryError};
+    #[cfg(feature = "storage-memory")]
+    use crate::storage::InMemoryStorageError;
     use serde_json::json;
     use std::collections::HashMap;
 
     // Mock async storage for testing
+    #[cfg(feature = "storage-memory")]
     struct MockAsyncStorage {
         data: HashMap<String, Value>,
     }
 
+    #[cfg(feature = "storage-memory")]
     impl MockAsyncStorage {
         fn new() -> Self {
             Self {
@@ -129,9 +144,10 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "storage-memory")]
     #[async_trait::async_trait]
     impl AsyncStorageBackend for MockAsyncStorage {
-        type Error = InMemoryError;
+        type Error = InMemoryStorageError;
 
         async fn set(&mut self, key: String, value: Value) -> Result<(), Self::Error> {
             self.data.insert(key, value);
@@ -164,6 +180,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "storage-memory")]
     #[tokio::test]
     async fn test_async_shared_store() -> Result<(), Box<dyn Error + Send + Sync>> {
         let storage = MockAsyncStorage::new();
@@ -186,7 +203,9 @@ mod tests {
             count: 42,
         };
 
-        store.set_serializable("struct_test".to_string(), &test_data).await?;
+        store
+            .set_serializable("struct_test".to_string(), &test_data)
+            .await?;
         let retrieved: Option<TestData> = store.get_deserializable("struct_test").await?;
         assert_eq!(retrieved, Some(test_data));
 
