@@ -295,7 +295,13 @@ impl StorageBackend for DatabaseStorage {
 ### Storage Backends
 
 - **`InMemoryStorage`**: Fast in-memory storage
-- **`FileStorage`**: JSON file-based persistence
+- **`RedisStorage`**: Redis-backed persistent storage (enable with `redis` feature)
+- **`DatabaseStorage`**: SQL database storage using SeaORM (enable with `database` feature)
+  - Supports SQLite, PostgreSQL, MySQL with granular feature control:
+    - `database-sqlite`: SQLite support only
+    - `database-postgres`: PostgreSQL support only  
+    - `database-mysql`: MySQL support only
+    - `database`: All database backends
 
 ## Examples
 
@@ -358,6 +364,24 @@ cargo run --example redis_storage --features redis
 ```
 
 Shows how to use Redis as a persistent storage backend for distributed workflows.
+
+### 8. Database Storage
+
+```bash
+# SQLite (lightweight, serverless)
+cargo run --example database_storage --features database-sqlite
+
+# PostgreSQL (advanced features, JSONB support)
+cargo run --example postgres_storage --features database-postgres  
+
+# MySQL (web applications, e-commerce)
+cargo run --example mysql_storage --features database-mysql
+
+# All databases
+cargo run --example database_storage --features database
+```
+
+Demonstrates SeaORM database integration with specific database examples showcasing each database's strengths and use cases.
 
 ### Real-World Patterns
 

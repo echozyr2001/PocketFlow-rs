@@ -31,6 +31,9 @@ pub mod storage;
 pub mod node;
 pub mod flow;
 
+#[cfg(feature = "database")]
+pub mod async_shared_store;
+
 // Re-export core types for easier access
 pub use action::{Action, ActionCondition, ActionBuilder, ComparisonOperator};
 pub use shared_store::{SharedStore, InMemorySharedStore};
@@ -49,6 +52,15 @@ pub mod prelude {
         SharedStore, StorageBackend, PocketFlowResult, PocketFlowError,
     };
     pub use crate::storage::{InMemoryStorage, FileStorage};
+    
+    #[cfg(feature = "redis")]
+    pub use crate::storage::RedisStorage;
+    
+    #[cfg(feature = "database")]
+    pub use crate::storage::DatabaseStorage;
+    
+    #[cfg(feature = "database")]
+    pub use crate::async_shared_store::AsyncSharedStore;
     pub use crate::node::{
         Node, NodeBackend, ExecutionContext, NodeError, NodeBuilder, 
         FunctionNode, InMemoryNode

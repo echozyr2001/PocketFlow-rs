@@ -4,11 +4,17 @@ mod file;
 #[cfg(feature = "redis")]
 mod redis;
 
+#[cfg(feature = "database")]
+mod database;
+
 pub use memory::{InMemoryStorage, InMemoryError};
 pub use file::{FileStorage, FileStorageError};
 
 #[cfg(feature = "redis")]
 pub use redis::{RedisStorage, RedisStorageError};
+
+#[cfg(feature = "database")]
+pub use database::DatabaseStorage;
 use serde_json::Value;
 use std::error::Error;
 
@@ -45,7 +51,7 @@ pub trait StorageBackend: Send + Sync {
 }
 
 /// Async version of StorageBackend for I/O-bound operations
-#[cfg(feature = "async")]
+#[cfg(any(feature = "async", feature = "database"))]
 #[async_trait::async_trait]
 pub trait AsyncStorageBackend: Send + Sync {
     /// Error type returned by storage operations
