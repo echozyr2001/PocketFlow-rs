@@ -21,6 +21,7 @@ async-openai = { version = "0.28", optional = true }
 reqwest = { version = "0.11", features = ["json"], optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }
 rand = { version = "0.8", optional = true }
+futures = { version = "0.3", optional = true }
 
 # Storage backends
 redis = { version = "0.31", optional = true }
@@ -46,7 +47,7 @@ default = ["builtin-nodes", "storage-memory"]
 builtin-nodes = ["dep:chrono"]
 
 # LLM相关节点（MockLlmNode、ApiRequestNode）
-builtin-llm = ["builtin-nodes", "dep:async-openai", "dep:reqwest", "dep:rand"]
+builtin-llm = ["builtin-nodes", "dep:async-openai", "dep:reqwest", "dep:rand", "dep:futures"]
 
 # 高级流程组件（FlowNode等）
 builtin-flows = []
@@ -138,4 +139,9 @@ required-features = ["builtin-flows"]
 [[example]]
 name = "api_request"
 path = "examples/api_request.rs"
+required-features = ["builtin-llm"]
+
+[[example]]
+name = "typewriter_chat"
+path = "examples/typewriter_chat.rs"
 required-features = ["builtin-llm"]

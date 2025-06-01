@@ -289,15 +289,16 @@ async fn test_execution_context() {
 async fn test_api_request_node_creation() {
     let config = ApiConfig {
         api_key: "test_key".to_string(),
+        base_url: None,
+        org_id: None,
         model: "gpt-3.5-turbo".to_string(),
         max_tokens: Some(100),
         temperature: Some(0.7),
-        base_url: None,
-        org_id: None,
         timeout: Some(30),
         top_p: None,
         frequency_penalty: None,
         presence_penalty: None,
+        stream: false,
     };
 
     let api_node = ApiRequestNode::new("prompt", "response", Action::simple("next"))

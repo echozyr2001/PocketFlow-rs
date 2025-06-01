@@ -429,8 +429,9 @@ pub mod llm {
         types::{ChatCompletionRequestMessage, CreateChatCompletionRequestArgs},
     };
     use async_trait::async_trait;
+    use futures::StreamExt;
     use serde_json::Value;
-    use std::time::Duration;
+    use std::time::Duration; // For stream processing
 
     /// Configuration for API requests
     #[derive(Debug, Clone)]
@@ -455,6 +456,8 @@ pub mod llm {
         pub frequency_penalty: Option<f32>,
         /// Presence penalty
         pub presence_penalty: Option<f32>,
+        /// Enable streaming response (default: false)
+        pub stream: bool,
     }
 
     impl Default for ApiConfig {
@@ -470,6 +473,7 @@ pub mod llm {
                 top_p: None,
                 frequency_penalty: None,
                 presence_penalty: None,
+                stream: false,
             }
         }
     }
@@ -534,6 +538,12 @@ pub mod llm {
         /// Set presence penalty
         pub fn with_presence_penalty(mut self, presence_penalty: f32) -> Self {
             self.presence_penalty = Some(presence_penalty);
+            self
+        }
+
+        /// Enable or disable streaming
+        pub fn with_stream(mut self, stream: bool) -> Self {
+            self.stream = stream;
             self
         }
     }
@@ -894,13 +904,15 @@ pub mod llm {
             let frequency_penalty = self.config.frequency_penalty;
             let presence_penalty = self.config.presence_penalty;
             let timeout_secs = self.config.timeout;
+            let stream = self.config.stream;
 
-            let client = self.get_client()?;
+            let _client = self.get_client()?;
 
             // Build the request using builder pattern correctly
             let mut request_builder = CreateChatCompletionRequestArgs::default();
             request_builder.model(model);
             request_builder.messages(messages);
+            request_builder.stream(stream); // Set streaming option
 
             if let Some(max_tokens) = max_tokens {
                 request_builder.max_tokens(max_tokens);
@@ -925,6 +937,23 @@ pub mod llm {
             let request = request_builder.build().map_err(|e| {
                 NodeError::ExecutionError(format!("Failed to build request: {}", e))
             })?;
+
+            if stream {
+                // Handle streaming response
+                self.make_streaming_request(request, timeout_secs).await
+            } else {
+                // Handle non-streaming response
+                self.make_regular_request(request, timeout_secs).await
+            }
+        }
+
+        /// Make a regular (non-streaming) API request
+        async fn make_regular_request(
+            &mut self,
+            request: async_openai::types::CreateChatCompletionRequest,
+            timeout_secs: Option<u64>,
+        ) -> Result<String, NodeError> {
+            let client = self.get_client()?;
 
             // Make the request with timeout
             let response =
@@ -953,6 +982,62 @@ pub mod llm {
                 .clone();
 
             Ok(content)
+        }
+
+        /// Make a streaming API request and accumulate the response
+        async fn make_streaming_request(
+            &mut self,
+            request: async_openai::types::CreateChatCompletionRequest,
+            timeout_secs: Option<u64>,
+        ) -> Result<String, NodeError> {
+            let client = self.get_client()?;
+
+            // Make the streaming request with timeout
+            let stream_result =
+                if let Some(timeout_secs) = timeout_secs {
+                    tokio::time::timeout(
+                        Duration::from_secs(timeout_secs),
+                        client.chat().create_stream(request),
+                    )
+                    .await
+                    .map_err(|_| NodeError::ExecutionError("Request timeout".to_string()))?
+                    .map_err(|e| NodeError::ExecutionError(format!("API request failed: {}", e)))?
+                } else {
+                    client.chat().create_stream(request).await.map_err(|e| {
+                        NodeError::ExecutionError(format!("API request failed: {}", e))
+                    })?
+                };
+
+            // Process the stream and accumulate content
+            let mut accumulated_content = String::new();
+            let mut stream = stream_result;
+
+            while let Some(result) = stream.next().await {
+                match result {
+                    Ok(response) => {
+                        // Extract content from the streaming response
+                        if let Some(choice) = response.choices.first() {
+                            if let Some(delta) = &choice.delta.content {
+                                accumulated_content.push_str(delta);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        return Err(NodeError::ExecutionError(format!(
+                            "Stream processing error: {}",
+                            e
+                        )));
+                    }
+                }
+            }
+
+            if accumulated_content.is_empty() {
+                return Err(NodeError::ExecutionError(
+                    "No content received from streaming response".to_string(),
+                ));
+            }
+
+            Ok(accumulated_content)
         }
     }
 
