@@ -209,6 +209,12 @@ pub struct FlowBuilder<S: StorageBackend> {
     config: FlowConfig,
 }
 
+impl<S: StorageBackend + 'static> Default for FlowBuilder<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<S: StorageBackend + 'static> FlowBuilder<S> {
     /// Create a new flow builder
     pub fn new() -> Self {
@@ -261,10 +267,7 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
             condition: None,
         };
 
-        self.routes
-            .entry(from_id)
-            .or_insert_with(Vec::new)
-            .push(route);
+        self.routes.entry(from_id).or_default().push(route);
         self
     }
 
@@ -283,10 +286,7 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
             condition: Some(condition),
         };
 
-        self.routes
-            .entry(from_id)
-            .or_insert_with(Vec::new)
-            .push(route);
+        self.routes.entry(from_id).or_default().push(route);
         self
     }
 }
@@ -382,10 +382,7 @@ where
     }
 
     fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError> {
-        self.routes
-            .entry(from_node_id)
-            .or_insert_with(Vec::new)
-            .push(route);
+        self.routes.entry(from_node_id).or_default().push(route);
         Ok(())
     }
 
@@ -857,10 +854,12 @@ mod tests {
     async fn test_max_steps_exceeded() {
         let infinite_node = Node::new(LogNode::new("Infinite", Action::simple("continue")));
 
-        let mut config = FlowConfig::default();
-        config.max_steps = 5;
-        config.detect_cycles = false; // Disable cycle detection for this test
-        config.start_node_id = "infinite".to_string();
+        let config = FlowConfig {
+            max_steps: 5,
+            detect_cycles: false, // Disable cycle detection for this test
+            start_node_id: "infinite".to_string(),
+            ..FlowConfig::default()
+        };
 
         let mut flow = FlowBuilder::new()
             .start_node("infinite")

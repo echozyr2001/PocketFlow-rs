@@ -3,6 +3,24 @@ use async_trait::async_trait;
 use std::time::Duration;
 use tokio::time::sleep;
 
+// Type aliases to reduce complexity warnings
+type PrepFn<S, P> = Box<dyn Fn(&SharedStore<S>, &ExecutionContext) -> P + Send + Sync>;
+type ExecFn<P, E> = Box<
+    dyn Fn(P, &ExecutionContext) -> Result<E, Box<dyn std::error::Error + Send + Sync>>
+        + Send
+        + Sync,
+>;
+type PostFn<S, P, E> = Box<
+    dyn Fn(
+            &mut SharedStore<S>,
+            P,
+            E,
+            &ExecutionContext,
+        ) -> Result<Action, Box<dyn std::error::Error + Send + Sync>>
+        + Send
+        + Sync,
+>;
+
 /// Simple error type for Node operations
 #[derive(Debug, thiserror::Error)]
 pub enum NodeError {
@@ -308,22 +326,9 @@ where
     E: Send + Sync + 'static,
 {
     name: String,
-    prep_fn: Box<dyn Fn(&SharedStore<S>, &ExecutionContext) -> P + Send + Sync>,
-    exec_fn: Box<
-        dyn Fn(P, &ExecutionContext) -> Result<E, Box<dyn std::error::Error + Send + Sync>>
-            + Send
-            + Sync,
-    >,
-    post_fn: Box<
-        dyn Fn(
-                &mut SharedStore<S>,
-                P,
-                E,
-                &ExecutionContext,
-            ) -> Result<Action, Box<dyn std::error::Error + Send + Sync>>
-            + Send
-            + Sync,
-    >,
+    prep_fn: PrepFn<S, P>,
+    exec_fn: ExecFn<P, E>,
+    post_fn: PostFn<S, P, E>,
     max_retries: usize,
     retry_delay: Duration,
 }

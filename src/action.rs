@@ -231,9 +231,32 @@ impl ActionCondition {
         ActionCondition::Or(conditions)
     }
 
-    /// Create a NOT condition
-    pub fn not(condition: ActionCondition) -> Self {
+    /// Create a NOT condition from another condition
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pocketflow_rs::action::ActionCondition;
+    ///
+    /// let condition = ActionCondition::key_equals("status", serde_json::json!("ready"));
+    ///
+    /// // Using static method
+    /// let negated1 = ActionCondition::negate(condition.clone());
+    ///
+    /// // Using ! operator (trait implementation)  
+    /// let negated2 = !condition;
+    /// ```
+    pub fn negate(condition: ActionCondition) -> Self {
         ActionCondition::Not(Box::new(condition))
+    }
+}
+
+// 实现标准库的 Not trait
+impl std::ops::Not for ActionCondition {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        ActionCondition::Not(Box::new(self))
     }
 }
 
@@ -533,8 +556,13 @@ mod tests {
         let cond5 = ActionCondition::or(vec![cond1.clone(), cond2.clone()]);
         assert!(cond5.to_string().contains("||"));
 
-        let cond6 = ActionCondition::not(cond1);
+        let cond6 = ActionCondition::negate(cond1);
         assert!(cond6.to_string().contains("!"));
+
+        // 测试 Not trait
+        let cond7 = ActionCondition::key_equals("status", serde_json::json!("ready"));
+        let cond8 = !cond7; // 使用 ! 操作符
+        assert!(cond8.to_string().contains("!"));
     }
 
     #[test]

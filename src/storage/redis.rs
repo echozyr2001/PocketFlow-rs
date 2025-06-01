@@ -62,7 +62,7 @@ impl RedisStorage {
             .connection
             .lock()
             .map_err(|e| RedisStorageError::Lock(e.to_string()))?;
-        f(&mut *conn).map_err(RedisStorageError::Connection)
+        f(&mut conn).map_err(RedisStorageError::Connection)
     }
 }
 
