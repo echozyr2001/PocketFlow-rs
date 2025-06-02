@@ -1,5 +1,60 @@
 # PocketFlow-rs
 
+[![Crates.io](https://img.shields.io/crates/v/pocketflow-rs.svg)](https://crates.io/crates/pocketflow-rs)
+[![Documentation](https://docs.rs/pocketflow-rs/badge.svg)](https://docs.rs/pocketflow-rs)
+[![License](https://img.shields.io/crates/l/pocketflow-rs.svg)](#license)
+
+🦀 **PocketFlow-rs** is a minimalist LLM workflow framework in Rust, inspired by the TypeScript version of [PocketFlow](https://github.com/The-Pocket/PocketFlow).
+
+## ✨ Key Features
+
+- 🎯 **Simple & Powerful**: Graph-based workflows with shared state management
+- 🔄 **Three-Phase Node Model**: Prep → Exec → Post for robust, retry-safe operations  
+- 🧩 **Composable Components**: Mix and match built-in nodes or create custom ones
+- 📦 **Modular Features**: Only include what you need with fine-grained feature flags
+- ⚡ **Async-First**: Built for modern async Rust with `tokio` support
+- 🛡️ **Production-Ready**: Comprehensive error handling, retry logic, and observability
+- 🔌 **Multiple Storage Backends**: Memory, File, Redis, SQL databases (SQLite, PostgreSQL, MySQL)
+
+## 🚀 Quick Start
+
+Add to your `Cargo.toml`:
+
+```toml
+# Minimal core features
+pocketflow-rs = { version = "0.1", default-features = false, features = ["core"] }
+
+# Default configuration (core + async + builtin-nodes + in-memory storage)  
+pocketflow-rs = "0.1"
+
+# Full features
+pocketflow-rs = { version = "0.1", features = ["full"] }
+```
+
+### Hello World Example
+
+```rust
+use pocketflow_rs::prelude::*;
+use serde_json::json;
+
+#[tokio::main]  
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create shared store
+    let mut store = SharedStore::new();
+    store.set("message".to_string(), json!("Hello, PocketFlow!"))?;
+    
+    // Create and run a simple logging node
+    let mut log_node = Node::new(
+        LogNode::new("Starting workflow", Action::simple("complete"))
+    );
+    
+    let result = log_node.run(&mut store).await?;
+    println!("Node completed with action: {}", result.name());
+    
+    Ok(())
+}
+```
+
 Reference from [PocketFlow](https://github.com/The-Pocket/PocketFlow)
 
 ## Table of Contents

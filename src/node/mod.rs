@@ -1,3 +1,135 @@
+//! # Node System - The Building Blocks of PocketFlow
+//!
+//! This module provides the node system, which represents the fundamental computation
+//! units in PocketFlow workflows. Nodes are designed around a three-phase execution
+//! model that separates concerns and enables robust, retry-safe operations.
+//!
+//! ## Three-Phase Execution Model
+//!
+//! Every node follows a consistent execution pattern:
+//!
+//! ### 1. Prep Phase (`prep`)
+//! - **Purpose**: Read and validate input data from the shared store
+//! - **Safety**: Read-only access to shared store, safe to retry
+//! - **Responsibility**: Data validation, input preparation, parameter extraction
+//! - **Output**: Prepared data for the execution phase
+//!
+//! ### 2. Exec Phase (`exec`)
+//! - **Purpose**: Perform the main computation (LLM calls, API requests, processing)
+//! - **Safety**: Idempotent by design, no shared store access
+//! - **Responsibility**: Core business logic, external service calls, computations
+//! - **Output**: Computation results for post-processing
+//!
+//! ### 3. Post Phase (`post`)
+//! - **Purpose**: Write results back to shared store and determine next action
+//! - **Safety**: Controlled shared store mutations, error handling
+//! - **Responsibility**: Result storage, state updates, flow control decisions
+//! - **Output**: Action indicating next flow step
+//!
+//! ## Core Components
+//!
+//! ### NodeBackend Trait
+//! The fundamental abstraction for implementing custom nodes:
+//!
+//! ```rust
+//! use pocketflow_rs::prelude::*;
+//! use async_trait::async_trait;
+//!
+//! struct CustomNode;
+//!
+//! #[async_trait]
+//! impl<S: StorageBackend + Send + Sync> NodeBackend<S> for CustomNode {
+//!     type PrepResult = String;
+//!     type ExecResult = String;
+//!     type Error = Box<dyn std::error::Error + Send + Sync>;
+//!     
+//!     async fn prep(&mut self, store: &SharedStore<S>, _: &ExecutionContext)
+//!         -> Result<Self::PrepResult, Self::Error> {
+//!         // Read input from shared store
+//!         let input = store.get("input")?.unwrap_or_default();
+//!         Ok(input.to_string())
+//!     }
+//!     
+//!     async fn exec(&mut self, prep_result: Self::PrepResult, _: &ExecutionContext)
+//!         -> Result<Self::ExecResult, Self::Error> {
+//!         // Perform computation (idempotent)
+//!         Ok(format!("processed: {}", prep_result))
+//!     }
+//!     
+//!     async fn post(&mut self, store: &mut SharedStore<S>, _prep: Self::PrepResult,
+//!                   exec_result: Self::ExecResult, _: &ExecutionContext)
+//!         -> Result<Action, Self::Error> {
+//!         // Write results and determine next action
+//!         store.set("output".to_string(), serde_json::json!(exec_result))?;
+//!         Ok(Action::simple("continue"))
+//!     }
+//! }
+//! ```
+//!
+//! ### Node Wrapper
+//! A concrete implementation that wraps any `NodeBackend` and provides:
+//! - Automatic retry logic with configurable delays
+//! - Error handling and fallback mechanisms
+//! - Execution context management
+//! - Lifecycle coordination
+//!
+//! ### ExecutionContext
+//! Provides execution metadata and controls:
+//! - **Retry Management**: Current attempt, max retries, delays
+//! - **Unique Identification**: Execution IDs for tracking and correlation
+//! - **Metadata Storage**: Additional context data for complex flows
+//! - **Flow Coordination**: Cross-node communication and state
+//!
+//! ## Built-in Node Types
+//!
+//! The library provides several ready-to-use node implementations:
+//!
+//! ### Basic Nodes (feature: `builtin-nodes`)
+//! - **LogNode**: Simple logging with configurable output
+//! - **SetValueNode**: Write values to shared store
+//! - **GetValueNode**: Read and validate shared store values  
+//! - **DelayNode**: Configurable execution delays
+//! - **ConditionalNode**: Branching logic based on store state
+//!
+//! ### LLM Nodes (feature: `builtin-llm`)
+//! - **ApiRequestNode**: Configurable HTTP API calls with streaming support
+//! - **MockLlmNode**: Testing and development placeholder
+//!
+//! ## Advanced Features
+//!
+//! ### FunctionNode
+//! For rapid prototyping, create nodes from closures:
+//!
+//! ```rust
+//! # use pocketflow_rs::prelude::*;
+//! # use std::time::Duration;
+//! let quick_node = FunctionNode::new(
+//!     "processor".to_string(),
+//!     |store, _ctx| store.get("input").unwrap().unwrap_or_default(),
+//!     |input, _ctx| Ok(format!("Quick processing: {}", input)),
+//!     |store, _prep, result, _ctx| {
+//!         store.set("quick_output".to_string(), serde_json::json!(result))?;
+//!         Ok(Action::simple("done"))
+//!     }
+//! ).with_retries(3).with_retry_delay(Duration::from_millis(100));
+//! ```
+//!
+//! ### Error Handling
+//! Comprehensive error system supporting:
+//! - **Automatic Retries**: Configurable retry counts and delays
+//! - **Graceful Fallbacks**: Custom error recovery strategies
+//! - **Error Classification**: Different error types for different handling
+//! - **Context Preservation**: Error context carried through execution
+//!
+//! ## Design Principles
+//!
+//! 1. **Separation of Concerns**: Each phase has distinct responsibilities
+//! 2. **Retry Safety**: Phases designed for safe retry on failure
+//! 3. **Composability**: Nodes work together seamlessly in complex flows
+//! 4. **Observability**: Rich context and state tracking throughout execution
+//! 5. **Performance**: Minimal allocations, efficient async execution
+//! 6. **Extensibility**: Easy to implement custom node types
+
 use crate::{Action, PocketFlowError, PocketFlowResult, SharedStore, StorageBackend};
 use async_trait::async_trait;
 use std::time::Duration;

@@ -1,3 +1,102 @@
+//! # Flow Orchestration System
+//!
+//! This module provides the core flow orchestration engine for PocketFlow, enabling
+//! the composition and execution of complex workflows from individual nodes.
+//!
+//! ## Architecture
+//!
+//! ### Flow as a Graph
+//! PocketFlow models workflows as directed graphs where:
+//! - **Nodes**: Individual computation units (LLM calls, data processing, etc.)
+//! - **Edges**: Action-based transitions with optional conditions
+//! - **SharedStore**: Communication medium between nodes
+//!
+//! ### Three-Phase Execution Model
+//! 1. **Validation**: Ensure flow integrity (reachable nodes, valid routes)
+//! 2. **Runtime Execution**: Step-by-step node execution with action-based routing
+//! 3. **Result Collection**: Comprehensive execution results with path tracking
+//!
+//! ## Core Components
+//!
+//! ### BasicFlow
+//! The main flow implementation supporting:
+//! - Dynamic node addition and route configuration
+//! - Configurable execution policies (max steps, cycle detection, terminal actions)
+//! - Rich execution context with retry logic and metadata
+//! - Comprehensive error handling and recovery
+//!
+//! ### FlowBuilder
+//! A fluent builder for constructing flows:
+//! ```rust
+//! # use pocketflow_rs::prelude::*;
+//! # use pocketflow_rs::node::builtin::LogNode;
+//! # #[cfg(feature = "builtin-nodes")]
+//! let flow = FlowBuilder::new()
+//!     .start_node("entry")
+//!     .max_steps(100)
+//!     .terminal_action("complete")
+//!     .node("entry", Node::new(LogNode::new("Starting", Action::simple("continue"))))
+//!     .route("entry", "continue", "next")
+//!     .conditional_route(
+//!         "entry",
+//!         "branch",
+//!         "conditional_node",
+//!         RouteCondition::KeyExists("flag".to_string())
+//!     )
+//!     .build();
+//! ```
+//!
+//! ### FlowNode
+//! Enables flow composition by wrapping flows as nodes, supporting:
+//! - Nested flow execution
+//! - Configurable nesting depth limits
+//! - Result propagation between flow levels
+//! - Metadata preservation across nesting levels
+//!
+//! ## Execution Guarantees
+//!
+//! ### Safety
+//! - **Cycle Detection**: Prevents infinite loops in flow execution
+//! - **Step Limiting**: Configurable maximum execution steps
+//! - **Nesting Depth Control**: Prevents stack overflow in nested flows
+//! - **Error Isolation**: Node failures don't crash entire flows
+//!
+//! ### Observability
+//! - **Execution Path Tracking**: Complete record of node execution order
+//! - **Step Counting**: Performance and complexity metrics
+//! - **Success/Failure Status**: Clear execution outcome indication
+//! - **Final Action Capture**: Last action taken before termination
+//!
+//! ## Advanced Features
+//!
+//! ### Conditional Routing
+//! Routes can include conditions evaluated against the shared store:
+//! ```rust
+//! # use pocketflow_rs::flow::RouteCondition;
+//! let condition = RouteCondition::KeyEquals(
+//!     "processing_mode".to_string(),
+//!     serde_json::json!("batch")
+//! );
+//! ```
+//!
+//! ### Flow Composition
+//! Flows can be composed hierarchically using FlowNode:
+//! ```rust
+//! # use pocketflow_rs::prelude::*;
+//! # let sub_flow = BasicFlow::new();
+//! let flow_node = FlowNode::new(sub_flow);
+//! // Use flow_node like any other node in a larger flow
+//! ```
+//!
+//! ## Error Handling
+//!
+//! The flow system provides comprehensive error handling:
+//! - **NodeNotFound**: Missing node references
+//! - **NoRouteFound**: Invalid action routing
+//! - **CycleDetected**: Infinite loop prevention
+//! - **MaxStepsExceeded**: Runaway execution protection
+//! - **InvalidConfiguration**: Setup validation errors
+
 use crate::node::{ExecutionContext, NodeBackend, NodeError};
 use crate::{Action, SharedStore, StorageBackend};
 use async_trait::async_trait;

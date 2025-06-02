@@ -1,8 +1,6 @@
-use pocketflow_rs::{
-    Action, ExecutionContext, InMemoryStorage, SharedStore,
-    node::NodeBackend,
-    node::builtin::llm::{ApiConfig, ApiRequestNode},
-};
+#[cfg(feature = "builtin-llm")]
+use pocketflow_rs::node::builtin::{ApiConfig, ApiRequestNode};
+use pocketflow_rs::{Action, ExecutionContext, InMemoryStorage, SharedStore, node::NodeBackend};
 use serde_json::json;
 use std::io::{self, Write};
 use std::time::Duration;
@@ -12,6 +10,20 @@ use tokio;
 /// 演示 PocketFlow-rs 流式API功能的基本用法
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(feature = "builtin-llm"))]
+    {
+        println!("❌ 此示例需要启用 'builtin-llm' feature");
+        println!("请使用以下命令运行：");
+        println!("cargo run --example simple_chatbot --features builtin-llm");
+        return Ok(());
+    }
+
+    #[cfg(feature = "builtin-llm")]
+    run_chatbot().await
+}
+
+#[cfg(feature = "builtin-llm")]
+async fn run_chatbot() -> Result<(), Box<dyn std::error::Error>> {
     println!("🤖 简单流式聊天机器人");
     println!("===================");
     println!("提示: 需要设置 OPENAI_API_KEY 环境变量");

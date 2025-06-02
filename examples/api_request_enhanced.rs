@@ -1,8 +1,24 @@
-use pocketflow_rs::{Action, prelude::*};
+use pocketflow_rs::Action;
+#[cfg(feature = "builtin-llm")]
+use pocketflow_rs::node::builtin::{ApiConfig, ApiRequestNode};
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(feature = "builtin-llm"))]
+    {
+        println!("❌ 此示例需要启用 'builtin-llm' feature");
+        println!("请使用以下命令运行：");
+        println!("cargo run --example api_request_enhanced --features builtin-llm");
+        return Ok(());
+    }
+
+    #[cfg(feature = "builtin-llm")]
+    run_examples().await
+}
+
+#[cfg(feature = "builtin-llm")]
+async fn run_examples() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 PocketFlow-rs ApiRequestNode 功能演示");
     println!("========================================");
 

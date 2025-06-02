@@ -1,3 +1,69 @@
+//! # Action and Condition System
+//!
+//! This module provides the action system for PocketFlow, which controls how execution flows
+//! between nodes in a workflow graph. Actions serve as both edge labels and execution directives.
+//!
+//! ## Core Concepts
+//!
+//! ### Actions
+//! Actions represent transitions between nodes and can be:
+//! - **Simple**: Basic string-based actions for backward compatibility
+//! - **Parameterized**: Actions with key-value parameters for context passing
+//! - **Conditional**: Actions that evaluate conditions before execution
+//! - **Multiple**: Collections of actions for parallel execution or choice points
+//! - **Prioritized**: Actions with explicit priority ordering
+//! - **WithMetadata**: Actions carrying additional execution metadata
+//!
+//! ### Conditions
+//! Conditions enable dynamic routing based on shared store state:
+//! - **KeyExists**: Check if a key is present in the shared store
+//! - **KeyEquals**: Compare a key's value to an expected value
+//! - **NumericCompare**: Perform numeric comparisons with various operators
+//! - **Expression**: String-based custom expressions (for future evaluation engines)
+//! - **Logical Operators**: AND, OR, NOT for complex condition composition
+//!
+//! ## Examples
+//!
+//! ```rust
+//! use pocketflow_rs::prelude::*;
+//! use serde_json::json;
+//! use std::collections::HashMap;
+//!
+//! // Simple action
+//! let continue_action = Action::simple("continue");
+//!
+//! // Parameterized action
+//! let mut params = HashMap::new();
+//! params.insert("temperature".to_string(), json!(0.7));
+//! let llm_action = Action::with_params("llm_call", params);
+//!
+//! // Conditional action with logical operators
+//! let ready_condition = ActionCondition::key_equals("status", json!("ready"));
+//! let valid_condition = ActionCondition::key_exists("user_input");
+//! let combined = ActionCondition::and(vec![ready_condition, valid_condition]);
+//!
+//! let conditional_action = Action::conditional(
+//!     combined,
+//!     Action::simple("process"),
+//!     Action::simple("wait")
+//! );
+//!
+//! // Using the builder pattern
+//! let complex_action = ActionBuilder::new("api_call")
+//!     .with_param("endpoint", json!("/generate"))
+//!     .with_param("method", json!("POST"))
+//!     .with_priority(10)
+//!     .build();
+//! ```
+//!
+//! ## Design Principles
+//!
+//! 1. **Composability**: Actions and conditions can be nested and combined arbitrarily
+//! 2. **Backward Compatibility**: Simple string actions work in all contexts
+//! 3. **Type Safety**: Strong typing with serialization support
+//! 4. **Expressiveness**: Rich condition system for complex routing logic
+//! 5. **Performance**: Efficient evaluation with minimal allocations
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
