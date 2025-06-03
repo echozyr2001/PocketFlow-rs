@@ -1,3 +1,7 @@
+This project has been moved to https://github.com/echozyr2001/CosmoFlow
+
+---
+
 # PocketFlow-rs
 
 [![Crates.io](https://img.shields.io/crates/v/pocketflow-rs.svg)](https://crates.io/crates/pocketflow-rs)
